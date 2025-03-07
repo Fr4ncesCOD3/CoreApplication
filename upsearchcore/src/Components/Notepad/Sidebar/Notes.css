@@ -1,0 +1,53 @@
+.notes-tree {
+  background-color: transparent;
+}
+
+.note-tree-item {
+  background-color: transparent;
+  transition: background-color 0.2s;
+  border-radius: 4px;
+  margin-bottom: 2px;
+}
+
+.note-tree-item.active {
+  background-color: rgba(13, 110, 253, 0.1);
+  font-weight: 500;
+}
+
+.note-tree-item:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.note-icon {
+  color: var(--text-secondary);
+}
+
+.note-title {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.create-child-note {
+  opacity: 0;
+  color: var(--text-secondary);
+  padding: 0;
+  transition: opacity 0.2s;
+}
+
+.note-tree-item:hover .create-child-note {
+  opacity: 1;
+}
+
+.create-child-note:hover {
+  color: var(--accent-color);
+}
+
+[data-theme="dark"] .note-tree-item.active {
+  background-color: rgba(13, 110, 253, 0.2);
+}
+
+[data-theme="dark"] .note-tree-item:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}

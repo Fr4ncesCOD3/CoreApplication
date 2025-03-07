@@ -1,0 +1,1796 @@
+/* Impostazioni di base per i container */
+.editor-container,
+.editor-content-container,
+.editor-content {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.editor-container {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow-x: visible;
+}
+
+.editor-content-container {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  background-color: var(--bg-primary);
+  padding-top: 16px;
+}
+
+.editor-content {
+  flex: 1;
+  overflow-y: auto;
+  background-color: var(--bg-primary);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 0;
+}
+
+/* Barra degli strumenti */
+.editor-toolbar {
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--bg-secondary);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  margin-top: 1px;
+}
+
+.toolbar-group {
+  position: relative;
+}
+
+.toolbar-group:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  right: -12px;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 24px;
+  width: 1px;
+  background-color: var(--border-color);
+}
+
+.editor-toolbar button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  cursor: pointer;
+  font-size: 0.95rem;
+  transition: all 0.2s ease;
+  min-width: 40px;
+  height: 40px;
+}
+
+.editor-toolbar button:hover {
+  background-color: var(--accent-color);
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+.editor-toolbar button.is-active {
+  background-color: var(--accent-color);
+  color: white;
+  border-color: var(--accent-color);
+}
+
+.editor-toolbar .divider {
+  width: 1px;
+  height: 24px;
+  background-color: var(--border-color);
+  margin: 0 8px;
+}
+
+/* Area di modifica del testo */
+.ProseMirror {
+  outline: none;
+  min-height: 100%;
+  height: 100%;
+  color: var(--text-primary);
+  line-height: 1.6;
+  font-size: var(--current-font-size, 16px);
+  letter-spacing: 0.01em;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 800px;
+  padding: 0 24px;
+  margin: 0;
+}
+
+/* Stili per gli elementi di testo */
+.ProseMirror p {
+  margin: 1.2em 0;
+  line-height: 1.7;
+  font-size: inherit;
+}
+
+.ProseMirror h1 {
+  font-size: 2.2em;
+  margin: 1.2em 0 0.6em;
+  font-weight: 700;
+  color: var(--accent-color);
+}
+
+.ProseMirror h2 {
+  font-size: 1.7em;
+  margin: 1.1em 0 0.5em;
+  font-weight: 600;
+}
+
+.ProseMirror h3 {
+  font-size: 1.4em;
+  margin: 1em 0 0.5em;
+  font-weight: 600;
+}
+
+/* Liste */
+.ProseMirror ul,
+.ProseMirror ol {
+  padding-left: 1.8em;
+  margin: 1em 0;
+}
+
+.ProseMirror li {
+  margin-bottom: 0.5em;
+}
+
+/* Elementi di codice */
+.ProseMirror code {
+  background-color: var(--bg-secondary);
+  padding: 0.2em 0.4em;
+  border-radius: 4px;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 0.9em;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.ProseMirror pre {
+  background-color: var(--bg-secondary);
+  padding: 1em 1.2em;
+  border-radius: 6px;
+  overflow-x: auto;
+  margin: 1.5em 0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.ProseMirror pre code {
+  background: none;
+  padding: 0;
+  box-shadow: none;
+  font-size: 0.95em;
+}
+
+/* Link e placeholder */
+.ProseMirror a {
+  color: var(--accent-color);
+  text-decoration: underline;
+  transition: color 0.2s;
+}
+
+.ProseMirror a:hover {
+  color: #8a7bf7;
+}
+
+.ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: var(--text-secondary);
+  pointer-events: none;
+  height: 0;
+  opacity: 0.6;
+  font-style: italic;
+}
+
+/* Anteprima markdown */
+.markdown-preview {
+  width: 50%;
+  padding: 16px;
+  border-left: 1px solid var(--border-color);
+  overflow-y: auto;
+  background-color: var(--bg-secondary);
+}
+
+.markdown-preview h3 {
+  margin-top: 0;
+  margin-bottom: 16px;
+  font-size: 1.2rem;
+  color: var(--text-secondary);
+}
+
+.preview-content {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+}
+
+/* Responsive design - Mobile */
+@media (max-width: 767px) {
+  .editor-toolbar {
+    padding: 10px 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    flex-wrap: nowrap;
+  }
+
+  .editor-toolbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .editor-toolbar .btn-toolbar {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+
+  .editor-toolbar .btn-group {
+    display: inline-flex;
+    flex-wrap: nowrap;
+    margin: 0;
+    flex-shrink: 0;
+  }
+
+  .editor-toolbar button {
+    padding: 6px 10px;
+    font-size: 0.9rem;
+    min-width: 36px;
+    height: 36px;
+    flex-shrink: 0;
+  }
+
+  .editor-toolbar .divider {
+    margin: 0 4px;
+    flex-shrink: 0;
+  }
+
+  .editor-content-container {
+    padding-top: 12px;
+  }
+  
+  .ProseMirror {
+    padding: 0 12px;
+    font-size: 1rem;
+    line-height: 1.5;
+  }
+  
+  .ProseMirror h1 {
+    font-size: 1.8em;
+  }
+  
+  .ProseMirror h2 {
+    font-size: 1.5em;
+  }
+  
+  .ProseMirror h3 {
+    font-size: 1.3em;
+  }
+  
+  .ProseMirror ul,
+  .ProseMirror ol {
+    padding-left: 1.5em;
+  }
+}
+
+/* Schermi molto piccoli */
+@media (max-width: 375px) {
+  .editor-toolbar {
+    padding: 6px;
+  }
+
+  .editor-toolbar button {
+    min-width: 32px;
+    height: 32px;
+    padding: 5px 8px;
+  }
+  
+  .ProseMirror {
+    padding: 0 8px;
+    font-size: 0.95rem;
+  }
+  
+  .ProseMirror h1 {
+    font-size: 1.6em;
+  }
+  
+  .ProseMirror h2 {
+    font-size: 1.4em;
+  }
+  
+  .ProseMirror h3 {
+    font-size: 1.2em;
+  }
+}
+
+/* Tablet */
+@media (min-width: 768px) and (max-width: 1023px) {
+  .ProseMirror {
+    max-width: 100%;
+  }
+}
+
+/* Desktop piccoli */
+@media (min-width: 1024px) and (max-width: 1199px) {
+  .ProseMirror {
+    max-width: 95%;
+  }
+}
+
+/* Desktop medi */
+@media (min-width: 1200px) and (max-width: 1439px) {
+  .ProseMirror {
+    max-width: 90%;
+  }
+}
+
+/* Desktop grandi (1440px) */
+@media (min-width: 1440px) and (max-width: 1799px) {
+  /* Rimuovi le limitazioni di larghezza massima */
+  .ProseMirror {
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 30px !important; /* Mantieni un po' di padding laterale per la leggibilità */
+  }
+  
+  .editor-content {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    align-items: flex-start !important; /* Allinea il contenuto a sinistra */
+  }
+  
+  .editor-content-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 16px 0 !important;
+    overflow-x: hidden !important;
+  }
+  
+  /* Rimuovi eventuali margini o padding dai container Bootstrap */
+  .editor-container .container-fluid,
+  .editor-container .row,
+  .editor-container .col {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+  
+  /* Assicurati che tutti i container utilizzino la larghezza completa */
+  .editor-container,
+  .editor-content,
+  .editor-content-container,
+  .ProseMirror,
+  .tiptap {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}
+
+/* Desktop molto grandi */
+@media (min-width: 1800px) {
+  .ProseMirror {
+    max-width: 1200px;
+    font-size: 1.1rem;
+  }
+}
+
+/* Tema scuro - miglioramenti specifici */
+[data-theme="dark"] .ProseMirror code {
+  background-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] .ProseMirror pre {
+  background-color: rgba(255, 255, 255, 0.05);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .ProseMirror h1 {
+  color: #a29bfe;
+}
+
+/* Animazione di focus */
+.ProseMirror:focus {
+  animation: subtle-glow 0.5s ease-out;
+}
+
+@keyframes subtle-glow {
+  0% { box-shadow: 0 0 0 0 rgba(108, 92, 231, 0); }
+  50% { box-shadow: 0 0 10px 0 rgba(108, 92, 231, 0.2); }
+  100% { box-shadow: 0 0 0 0 rgba(108, 92, 231, 0); }
+}
+
+/* Stili per il menu dimensione testo */
+.font-size-btn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.font-size-value {
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+/* Stili per il popover della dimensione del testo */
+.font-size-popover {
+  min-width: 250px;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+}
+
+.font-size-popover .popover-header {
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-color);
+  font-size: 0.95rem;
+  padding: 10px 15px;
+  text-align: center;
+}
+
+.font-size-popover .popover-body {
+  padding: 15px;
+  background-color: var(--bg-primary);
+}
+
+/* Stili per il contenitore dello slider */
+.font-size-slider-container {
+  padding: 10px;
+  width: 200px;
+}
+
+/* Stili per l'anteprima della dimensione del testo */
+.font-size-preview {
+  text-align: center;
+  margin-bottom: 10px;
+  font-family: serif;
+  color: #333;
+}
+
+/* Stili per lo slider */
+.font-size-slider {
+  width: 100%;
+}
+
+/* Stili per l'indicazione del range */
+.font-size-range {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 5px;
+  font-size: 12px;
+  color: #666;
+}
+
+/* Stili per migliorare l'interattività dello slider */
+.font-size-slider::-webkit-slider-thumb {
+  cursor: ew-resize;
+}
+
+.font-size-slider:active::-webkit-slider-thumb {
+  transform: scale(1.2);
+}
+
+/* Stili per il tema scuro */
+[data-theme="dark"] .font-size-popover .popover-header {
+  background-color: #2a2a2a;
+  border-color: #444;
+}
+
+[data-theme="dark"] .font-size-popover .popover-body {
+  background-color: #222;
+}
+
+[data-theme="dark"] .font-size-preview {
+  background-color: #333;
+  border-color: #444;
+}
+
+[data-theme="dark"] .font-size-slider::-webkit-slider-runnable-track {
+  background-color: #444;
+}
+
+[data-theme="dark"] .font-size-slider::-moz-range-track {
+  background-color: #444;
+}
+
+/* Miglioramenti per la responsività */
+@media (max-width: 767px) {
+  .font-size-popover {
+    position: fixed !important;
+    top: auto !important;
+    bottom: 10px !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    width: 90% !important;
+    max-width: 300px !important;
+  }
+}
+
+/* Stili per il selettore di colore */
+.color-picker-menu {
+  min-width: 160px;
+  padding: 8px;
+}
+
+.color-option {
+  width: 24px;
+  height: 24px;
+  margin: 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid var(--border-color);
+}
+
+.color-option:hover {
+  transform: scale(1.1);
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Stili per il testo colorato e dimensionato */
+[data-theme="dark"] .ProseMirror [style*="color"] {
+  color: inherit !important;
+}
+
+.ProseMirror [style*="font-size"] {
+  line-height: 1.5;
+}
+
+/* Miglioramenti per i menu a discesa */
+.font-size-menu,
+.color-picker-menu {
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+}
+
+.font-size-menu .dropdown-item {
+  padding: 10px 16px;
+  transition: all 0.2s ease;
+}
+
+.font-size-menu .dropdown-item:hover {
+  background-color: var(--accent-color);
+  color: white;
+}
+
+.color-option {
+  width: 30px;
+  height: 30px;
+  margin: 5px;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid var(--border-color);
+  transition: all 0.2s ease;
+}
+
+.color-option:hover {
+  transform: scale(1.15);
+  box-shadow: 0 0 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Miglioramenti per il tema scuro */
+[data-theme="dark"] .editor-toolbar {
+  background-color: #1a1a1a;
+  border-bottom-color: #333;
+}
+
+[data-theme="dark"] .editor-toolbar button {
+  background-color: #2a2a2a;
+  border-color: #444;
+}
+
+[data-theme="dark"] .editor-toolbar button:hover {
+  background-color: var(--accent-color);
+}
+
+[data-theme="dark"] .font-size-menu,
+[data-theme="dark"] .color-picker-menu {
+  background-color: #2a2a2a;
+  border-color: #444;
+}
+
+[data-theme="dark"] .font-size-menu .dropdown-item {
+  color: #eee;
+}
+
+[data-theme="dark"] .font-size-menu .dropdown-item:hover {
+  background-color: var(--accent-color);
+}
+
+/* Miglioramenti per il menu contestuale */
+.bubble-menu {
+  position: absolute;
+  display: none;
+  background-color: var(--bg-primary);
+  border-radius: 6px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  padding: 6px;
+  z-index: 1000;
+  flex-direction: row;
+  align-items: center;
+  transition: opacity 0.2s, transform 0.2s;
+  border: 1px solid var(--border-color);
+}
+
+.bubble-btn {
+  background: none;
+  border: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  cursor: pointer;
+  color: var(--text-primary);
+  margin: 0 2px;
+  padding: 0;
+  font-size: 14px;
+}
+
+.bubble-btn:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="dark"] .bubble-btn:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.size-slider-container {
+  display: none;
+  padding: 0 8px;
+  width: 120px;
+}
+
+.size-slider-container.active {
+  display: block;
+}
+
+.size-slider {
+  width: 100%;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--accent-color);
+  outline: none;
+  border-radius: 2px;
+}
+
+.size-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--accent-color);
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.size-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+/* Stile per i blocchi di testo */
+.ProseMirror p {
+  margin: 0.5em 0;
+  transition: background-color 0.2s;
+  border-radius: 4px;
+  padding: 4px 0;
+}
+
+.ProseMirror p:hover {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+[data-theme="dark"] .ProseMirror p:hover {
+  background-color: rgba(255, 255, 255, 0.02);
+}
+
+/* Animazione per il cambio di dimensione del testo */
+.ProseMirror [style*="font-size"] {
+  transition: font-size 0.2s ease;
+}
+
+/* Miglioramento dell'interfaccia per il controllo della dimensione del testo */
+.font-size-popover .popover-body {
+  padding: 12px;
+}
+
+.font-size-preview {
+  font-size: var(--preview-size);
+  text-align: center;
+  margin-bottom: 10px;
+  font-family: serif;
+  color: var(--text-primary);
+  transition: font-size 0.2s ease;
+}
+
+.font-size-slider {
+  width: 100%;
+  height: 6px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: linear-gradient(to right, var(--accent-color), #a29bfe);
+  outline: none;
+  border-radius: 3px;
+  margin: 10px 0;
+}
+
+.font-size-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent-color);
+  cursor: ew-resize;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: transform 0.1s;
+}
+
+.font-size-slider:active::-webkit-slider-thumb {
+  transform: scale(1.2);
+}
+
+.font-size-range {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 5px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* Aggiungi anche una regola generale per tutti gli schermi grandi */
+@media (min-width: 1200px) {
+  .content-area {
+    width: calc(100% - var(--sidebar-width)) !important;
+    max-width: none !important;
+  }
+  
+  .editor-content {
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+}
+
+:root {
+  --current-font-size: 16px;
+}
+
+/* Stile per applicare la dimensione del testo corrente al testo nuovo */
+.ProseMirror p:last-child:focus {
+  font-size: var(--current-font-size);
+}
+
+/* Stili per migliorare la visualizzazione durante il trascinamento */
+.font-size-slider:active {
+  cursor: grabbing;
+}
+
+.font-size-slider:active::-webkit-slider-thumb {
+  transform: scale(1.2);
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+}
+
+.font-size-slider:active::-moz-range-thumb {
+  transform: scale(1.2);
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.2);
+}
+
+/* Stile per evidenziare il testo durante la modifica della dimensione */
+.ProseMirror span[style*="font-size"] {
+  transition: font-size 0.1s ease-out;
+  display: inline-block;
+}
+
+/* Animazione per rendere più fluido il cambio di dimensione */
+@keyframes fontSizeChange {
+  from { opacity: 0.8; }
+  to { opacity: 1; }
+}
+
+.ProseMirror span[style*="font-size"]:not(:focus-within) {
+  animation: fontSizeChange 0.2s ease-out;
+}
+
+/* Stili per evidenziare il testo con dimensione personalizzata */
+.ProseMirror span[style*="font-size"] {
+  transition: background-color 0.2s ease;
+  border-radius: 2px;
+}
+
+.ProseMirror span[style*="font-size"]:hover {
+  background-color: rgba(108, 92, 231, 0.1);
+}
+
+/* Stile per il pulsante della dimensione del testo */
+.font-size-btn {
+  min-width: 70px !important;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px !important;
+}
+
+.font-size-value {
+  margin-left: 5px;
+  font-weight: 500;
+}
+
+/* Assicurati che gli span con dimensione personalizzata mantengano il loro stile */
+.ProseMirror span[data-font-size] {
+  font-size: attr(data-font-size px) !important;
+  display: inline-block;
+}
+
+/* Previeni che l'editor sovrascriva gli stili personalizzati */
+.ProseMirror:focus span[data-font-size],
+.ProseMirror span[data-font-size] * {
+  font-size: inherit !important;
+}
+
+/* Assicurati che il nuovo testo inserito dopo un elemento con dimensione personalizzata erediti quella dimensione */
+.ProseMirror p:has(span[data-font-size]) {
+  font-size: var(--current-font-size);
+}
+
+/* Controlli dei blocchi stile Notion */
+.block-controls {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  height: 0;
+}
+
+.block-control {
+  position: absolute;
+  left: -30px;
+  transform: translateY(-50%);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.ProseMirror p:hover + .block-control,
+.ProseMirror h1:hover + .block-control,
+.ProseMirror h2:hover + .block-control,
+.ProseMirror h3:hover + .block-control,
+.ProseMirror ul:hover + .block-control,
+.ProseMirror ol:hover + .block-control,
+.block-control:hover,
+.block-control.active {
+  opacity: 1;
+}
+
+.add-block-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  background-color: var(--bg-secondary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 16px;
+  border: 1px solid var(--border-color);
+  transition: all 0.2s;
+}
+
+.add-block-btn:hover {
+  background-color: var(--accent-color);
+  color: white;
+}
+
+.block-menu {
+  position: absolute;
+  left: 30px;
+  top: 0;
+  background-color: var(--bg-primary);
+  border-radius: 6px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border-color);
+  width: 150px;
+  display: none;
+  z-index: 1000;
+}
+
+.block-control.active .block-menu {
+  display: block;
+}
+
+.block-menu-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.block-menu-item:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="dark"] .block-menu-item:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+/* Stile per i blocchi quando si digita / per il menu dei comandi */
+.slash-command-menu {
+  position: absolute;
+  background-color: var(--bg-primary);
+  border-radius: 6px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border-color);
+  width: 200px;
+  z-index: 1000;
+}
+
+.slash-command-item {
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.slash-command-item:hover,
+.slash-command-item.active {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+[data-theme="dark"] .slash-command-item:hover,
+[data-theme="dark"] .slash-command-item.active {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.slash-command-icon {
+  margin-right: 8px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.slash-command-title {
+  font-weight: 500;
+}
+
+.slash-command-description {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+/* Applica la dimensione del testo corrente ai nuovi paragrafi */
+.ProseMirror p:empty {
+  font-size: var(--current-font-size, 16px);
+}
+
+/* Mantieni la dimensione del testo quando si va a capo */
+.ProseMirror [data-font-size] {
+  font-size: attr(data-font-size);
+}
+
+/* Assicura che il testo con stile mantenga la sua dimensione */
+.ProseMirror [style*="font-size"] {
+  font-size: var(--current-font-size, 16px);
+}
+
+/* Stile per il testo attualmente in fase di modifica */
+.ProseMirror .has-focus {
+  background-color: rgba(0, 0, 0, 0.05);
+  border-radius: 4px;
+}
+
+[data-theme="dark"] .ProseMirror .has-focus {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+/* Assicura che i nuovi paragrafi mantengano la dimensione del testo */
+.ProseMirror p {
+  font-size: inherit;
+}
+
+/* Applica la dimensione del testo corrente ai nuovi paragrafi */
+.ProseMirror p:empty {
+  font-size: var(--current-font-size, 16px);
+}
+
+/* Rimuovi le animazioni che potrebbero causare problemi di rendering */
+.ProseMirror [style*="font-size"] {
+  transition: none; /* Rimuovi la transizione per evitare problemi di rendering */
+}
+
+/* Ottimizzazioni per dispositivi mobili */
+.mobile-mode .ProseMirror {
+  min-height: 70vh;
+  padding: 16px;
+  font-size: 16px;
+  caret-color: var(--accent-color);
+  -webkit-tap-highlight-color: rgba(var(--accent-color-rgb, 108, 92, 231), 0.2); /* Feedback visivo leggero al tap */
+}
+
+/* Aumenta la dimensione dei paragrafi su mobile per facilitare la selezione */
+.mobile-mode .ProseMirror p,
+.mobile-mode .ProseMirror h1,
+.mobile-mode .ProseMirror h2,
+.mobile-mode .ProseMirror h3 {
+  margin: 1em 0;
+  padding: 0.5em 0;
+}
+
+/* Aumenta lo spazio tra gli elementi delle liste su mobile */
+.mobile-mode .ProseMirror li {
+  margin-bottom: 0.8em;
+  padding: 0.3em 0;
+}
+
+/* Barra degli strumenti mobile semplificata */
+.mobile-toolbar {
+  position: sticky;
+  top: 0;
+  background-color: var(--bg-primary);
+  padding: 8px;
+  border-bottom: 1px solid var(--border-color);
+  z-index: 10;
+  display: flex;
+  justify-content: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.mobile-toolbar-group {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 4px;
+}
+
+.mobile-toolbar-btn {
+  min-width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  padding: 0;
+  margin: 0 2px;
+}
+
+/* Pulsante flottante per accedere alle opzioni di formattazione */
+.mobile-format-button {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background-color: var(--accent-color);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  z-index: 1000;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.mobile-format-button:active {
+  transform: scale(0.95);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Opzioni di formattazione mobile */
+.mobile-format-options {
+  position: fixed;
+  bottom: 84px;
+  right: 20px;
+  background-color: var(--bg-primary);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  width: 200px;
+  z-index: 1000;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+}
+
+.mobile-format-option {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.mobile-format-option:last-child {
+  border-bottom: none;
+}
+
+.mobile-format-option:active {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.option-icon {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 12px;
+  font-weight: bold;
+  color: var(--accent-color);
+}
+
+.option-label {
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+/* Ottimizzazioni per la selezione del testo su mobile */
+.mobile-editor::selection,
+.mobile-editor *::selection {
+  background-color: rgba(var(--accent-color-rgb, 108, 92, 231), 0.3);
+}
+
+/* Aumenta l'area di tocco per i controlli */
+.mobile-mode .ProseMirror a,
+.mobile-mode .ProseMirror button {
+  padding: 4px;
+  min-height: 44px; /* Dimensione minima raccomandata per i target touch */
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Migliora la visualizzazione del popover della dimensione del testo su mobile */
+@media (max-width: 767px) {
+  .font-size-popover {
+    max-width: 280px;
+    width: 90vw;
+  }
+  
+  .font-size-slider {
+    height: 8px; /* Slider più spesso su mobile */
+  }
+  
+  .font-size-slider::-webkit-slider-thumb {
+    width: 24px;
+    height: 24px;
+  }
+  
+  .font-size-preview {
+    font-size: 24px;
+    margin: 12px 0;
+  }
+  
+  /* Posizionamento migliorato per il popover su mobile */
+  .popover {
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+  }
+}
+
+/* Migliora la visualizzazione della tastiera virtuale */
+@media (max-width: 767px) {
+  .mobile-keyboard-open .editor-content-container {
+    padding-bottom: 40vh; /* Spazio per la tastiera */
+  }
+  
+  /* Nascondi il pulsante flottante quando la tastiera è aperta */
+  .mobile-keyboard-open .mobile-format-button {
+    display: none;
+  }
+}
+
+/* Tema scuro per mobile */
+[data-theme="dark"] .mobile-toolbar {
+  background-color: var(--bg-secondary);
+  border-color: var(--border-color);
+}
+
+[data-theme="dark"] .mobile-format-options {
+  background-color: var(--bg-secondary);
+}
+
+[data-theme="dark"] .mobile-format-option:active {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+/* Toolbar mobile scrollabile orizzontalmente */
+.mobile-toolbar-container {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: var(--bg-primary);
+  border-bottom: 1px solid var(--border-color);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.mobile-toolbar {
+  width: 100%;
+  overflow: hidden;
+  padding: 8px 0;
+}
+
+.mobile-toolbar-scroll {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 8px;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+.mobile-toolbar-scroll::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+
+.mobile-toolbar-btn {
+  min-width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  padding: 0;
+  margin: 0 4px;
+  flex-shrink: 0;
+  border-radius: 8px;
+}
+
+.mobile-toolbar-btn .btn-text {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* Color picker mobile */
+.mobile-color-picker {
+  padding: 8px;
+  background-color: var(--bg-primary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.color-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 4px;
+}
+
+.color-option {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 1px solid var(--border-color);
+  transition: transform 0.2s;
+}
+
+.color-option:hover, 
+.color-option:active {
+  transform: scale(1.2);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Tema scuro per la toolbar mobile */
+[data-theme="dark"] .mobile-toolbar-container {
+  background-color: var(--bg-secondary);
+  border-color: var(--border-color);
+}
+
+[data-theme="dark"] .mobile-toolbar-btn {
+  color: var(--text-primary);
+}
+
+[data-theme="dark"] .mobile-toolbar-btn:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .mobile-color-picker {
+  background-color: var(--bg-secondary);
+}
+
+/* Ottimizzazioni per schermi molto piccoli */
+@media (max-width: 320px) {
+  .mobile-toolbar-btn {
+    min-width: 36px;
+    height: 36px;
+    margin: 0 2px;
+  }
+  
+  .color-option {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+/* Indicatore di scorrimento orizzontale */
+.mobile-toolbar::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  height: 100%;
+  width: 24px;
+  background: linear-gradient(to right, transparent, var(--bg-primary) 70%);
+  pointer-events: none;
+}
+
+[data-theme="dark"] .mobile-toolbar::after {
+  background: linear-gradient(to right, transparent, var(--bg-secondary) 70%);
+}
+
+/* Indicatori di scorrimento */
+.mobile-toolbar.has-more-right::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  height: 100%;
+  width: 24px;
+  background: linear-gradient(to right, transparent, var(--bg-primary) 70%);
+  pointer-events: none;
+}
+
+.mobile-toolbar.has-more-left::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 24px;
+  background: linear-gradient(to left, transparent, var(--bg-primary) 70%);
+  pointer-events: none;
+}
+
+[data-theme="dark"] .mobile-toolbar.has-more-right::after {
+  background: linear-gradient(to right, transparent, var(--bg-secondary) 70%);
+}
+
+[data-theme="dark"] .mobile-toolbar.has-more-left::before {
+  background: linear-gradient(to left, transparent, var(--bg-secondary) 70%);
+}
+
+/* Animazioni per migliorare l'esperienza utente */
+.mobile-toolbar-btn {
+  transition: background-color 0.2s, transform 0.1s, color 0.2s;
+}
+
+.mobile-toolbar-btn:active {
+  transform: scale(0.95);
+}
+
+.mobile-color-picker {
+  animation: slideDown 0.2s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Feedback tattile per i pulsanti */
+.mobile-toolbar-btn:active::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  animation: ripple 0.4s ease-out;
+}
+
+@keyframes ripple {
+  from {
+    opacity: 1;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.5);
+  }
+}
+
+/* Ottimizzazioni per la scrittura su mobile */
+.mobile-mode .editor-content-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  position: relative;
+}
+
+.mobile-mode .editor-content {
+  flex-grow: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 60px; /* Spazio extra in fondo per evitare che la tastiera copra il testo */
+}
+
+.mobile-mode .ProseMirror {
+  min-height: 70vh; /* Garantisce spazio sufficiente per scrivere */
+  padding: 16px;
+  font-size: 16px; /* Dimensione minima per evitare lo zoom automatico su iOS */
+  caret-color: var(--accent-color); /* Cursore più visibile */
+  -webkit-tap-highlight-color: transparent; /* Rimuove l'evidenziazione al tap */
+}
+
+/* Migliora la visibilità del cursore su mobile */
+.mobile-mode .ProseMirror .ProseMirror-gapcursor:after {
+  border-top: 2px solid var(--accent-color);
+  margin-top: -1px;
+}
+
+/* Pulsante per forzare il focus */
+.mobile-focus-button {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: var(--accent-color);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 20px;
+  font-size: 16px;
+  font-weight: 500;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  z-index: 100;
+  animation: pulse 2s infinite;
+  transition: opacity 0.3s, transform 0.3s;
+}
+
+/* Animazione di scomparsa per il pulsante */
+.mobile-focus-button.hiding {
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.9);
+  pointer-events: none;
+}
+
+/* Adattamenti quando la tastiera è visibile */
+.mobile-mode.keyboard-visible .editor-content {
+  padding-bottom: 120px; /* Spazio extra quando la tastiera è visibile */
+}
+
+.mobile-mode.keyboard-visible .mobile-toolbar-container {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+}
+
+/* Assicurati che l'area di testo sia sempre visibile e accessibile */
+.mobile-mode .ProseMirror {
+  touch-action: pan-x pan-y; /* Permette lo scrolling ma previene lo zoom */
+}
+
+/* Migliora la selezione del testo su mobile */
+.mobile-mode .ProseMirror::selection,
+.mobile-mode .ProseMirror *::selection {
+  background-color: rgba(var(--accent-color-rgb, 108, 92, 231), 0.3);
+}
+
+/* Aumenta l'area di tocco per i paragrafi */
+.mobile-mode .ProseMirror p,
+.mobile-mode .ProseMirror h1,
+.mobile-mode .ProseMirror h2,
+.mobile-mode .ProseMirror h3,
+.mobile-mode .ProseMirror li {
+  padding: 8px 0;
+  margin: 8px 0;
+  min-height: 44px; /* Altezza minima per un buon target touch */
+}
+
+/* Previeni lo zoom automatico su input */
+.mobile-mode input,
+.mobile-mode textarea,
+.mobile-mode select {
+  font-size: 16px;
+}
+
+/* Assicurati che la toolbar non copra l'editor */
+.mobile-toolbar-container {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: var(--bg-primary);
+  border-bottom: 1px solid var(--border-color);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Tema scuro */
+[data-theme="dark"] .mobile-focus-button {
+  background-color: var(--accent-color);
+  color: white;
+}
+
+/* Tutorial per mobile */
+.mobile-tutorial {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.tutorial-content {
+  background-color: var(--bg-primary);
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 90%;
+  text-align: center;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.tutorial-content h3 {
+  margin-bottom: 16px;
+  color: var(--accent-color);
+}
+
+.tutorial-content p {
+  margin-bottom: 12px;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.tutorial-button {
+  background-color: var(--accent-color);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 24px;
+  font-size: 16px;
+  font-weight: 500;
+  margin-top: 16px;
+  transition: background-color 0.2s, transform 0.1s;
+}
+
+.tutorial-button:active {
+  transform: scale(0.98);
+  background-color: var(--accent-color-dark, #5b4bc7);
+}
+
+[data-theme="dark"] .tutorial-content {
+  background-color: var(--bg-secondary);
+}
+
+/* Aggiungi un indicatore di focus per l'editor */
+.mobile-mode .ProseMirror:focus {
+  outline: none;
+  box-shadow: inset 0 0 0 2px rgba(var(--accent-color-rgb, 108, 92, 231), 0.3);
+  border-radius: 4px;
+}
+
+/* Pulsante per forzare il focus - con transizione fluida */
+.mobile-focus-button {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: var(--accent-color);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 20px;
+  font-size: 16px;
+  font-weight: 500;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+  z-index: 100;
+  animation: pulse 2s infinite;
+  transition: opacity 0.3s, transform 0.3s;
+}
+
+/* Animazione di scomparsa per il pulsante */
+.mobile-focus-button.hiding {
+  opacity: 0;
+  transform: translate(-50%, -50%) scale(0.9);
+  pointer-events: none;
+}
+
+/* Assicurati che i pulsanti della toolbar abbiano un'area di tocco adeguata */
+.mobile-toolbar-btn {
+  min-width: 44px; /* Dimensione minima raccomandata per target touch */
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  padding: 0;
+  margin: 0 4px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  position: relative; /* Per il feedback tattile */
+}
+
+/* Tool per la dimensione del testo su mobile */
+.mobile-font-size-tool {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+  padding: 16px;
+  z-index: 1050;
+  transform: translateY(100%);
+  transition: transform 0.3s ease;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.mobile-font-size-tool.active {
+  transform: translateY(0);
+}
+
+.tool-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 1040;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease;
+}
+
+.tool-overlay.active {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Miglioramento palette colori mobile */
+.mobile-color-picker {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+  padding: 16px;
+  z-index: 1050;
+  transform: translateY(100%);
+  transition: transform 0.3s ease;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.mobile-color-picker.active {
+  transform: translateY(0);
+}
+
+.color-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 10px;
+  margin-top: 10px;
+}
+
+@media (max-width: 375px) {
+  .color-picker-grid {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}
+
+/* Stili comuni per gli strumenti mobile */
+.tool-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.tool-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.close-btn:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* Miglioramento accessibilità touch */
+.color-option {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform 0.2s, border-color 0.2s;
+}
+
+.color-option.active {
+  border-color: var(--accent-color);
+  transform: scale(1.1);
+}
+
+.color-option:active {
+  transform: scale(0.95);
+}
+
+/* Gestione tastiera mobile */
+.keyboard-visible .mobile-font-size-tool,
+.keyboard-visible .mobile-color-picker {
+  transform: translateY(0);
+  position: absolute;
+  bottom: 0;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+/* Tema scuro */
+[data-theme="dark"] .mobile-font-size-tool,
+[data-theme="dark"] .mobile-color-picker {
+  background-color: var(--bg-secondary);
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] .close-btn:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Indicatore di swipe */
+.swipe-indicator {
+  width: 40px;
+  height: 4px;
+  background-color: var(--border-color);
+  border-radius: 2px;
+  margin: 0 auto 16px;
+}
