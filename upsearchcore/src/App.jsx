@@ -19,6 +19,25 @@ function App() {
     setTheme(prevTheme => prevTheme === 'light' ? 'dark' : 'light')
   }
 
+  useEffect(() => {
+    // Funzione per prevenire il comportamento predefinito del browser
+    const preventDefault = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      return false;
+    };
+    
+    // Aggiungi event listener globali
+    document.addEventListener('dragover', preventDefault);
+    document.addEventListener('drop', preventDefault);
+    
+    // Cleanup
+    return () => {
+      document.removeEventListener('dragover', preventDefault);
+      document.removeEventListener('drop', preventDefault);
+    };
+  }, []);
+
   return (
     <Router>
       <div className="app" data-theme={theme}>

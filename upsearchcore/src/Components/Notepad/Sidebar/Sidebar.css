@@ -10,6 +10,7 @@
   position: relative;
   left: 0;
   top: 0;
+  box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
 }
 
 .sidebar-header {
@@ -117,21 +118,24 @@
 }
 
 .note-item.active .note-item-content {
-  background-color: rgba(0, 0, 0, 0.05);
+  background-color: rgba(108, 92, 231, 0.2);
   font-weight: 500;
+  border-left: 3px solid var(--accent-color);
 }
 
 .note-item-content {
   display: flex;
   align-items: center;
-  padding: 8px;
+  padding: 10px 12px;
   cursor: pointer;
-  border-radius: 4px;
-  transition: background-color 0.2s;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  margin-bottom: 4px;
 }
 
 .note-item-content:hover {
-  background-color: rgba(0, 0, 0, 0.05);
+  background-color: rgba(108, 92, 231, 0.1);
+  transform: translateX(4px);
 }
 
 .toggle-btn {

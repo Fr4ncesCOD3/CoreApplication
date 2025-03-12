@@ -1,41 +1,50 @@
-import { Mark } from '@tiptap/core'
+import { Extension } from '@tiptap/core'
 
-export const TextColor = Mark.create({
+export const TextColor = Extension.create({
   name: 'textColor',
   
   addOptions() {
     return {
-      HTMLAttributes: {},
-    }
+      types: ['textStyle'],
+    };
   },
   
-  parseHTML() {
+  addGlobalAttributes() {
     return [
       {
-        tag: 'span[style*="color"]',
-        getAttrs: element => ({
-          color: element.style.color,
-        }),
+        types: this.options.types,
+        attributes: {
+          color: {
+            default: null,
+            parseHTML: element => element.style.color,
+            renderHTML: attributes => {
+              if (!attributes.color) return {}
+              
+              // Aggiungi !important e una classe specifica per il tema scuro
+              return {
+                style: `color: ${attributes.color} !important`,
+                class: 'text-styled color-override'
+              }
+            },
+          },
+        },
       },
-    ]
-  },
-  
-  renderHTML({ HTMLAttributes }) {
-    return ['span', { style: `color: ${HTMLAttributes.color || 'currentColor'}` }, 0]
+    ];
   },
   
   addCommands() {
     return {
       setTextColor: color => ({ chain }) => {
+        console.log("Setting text color to:", color); // Aggiungi log per debug
         return chain()
-          .setMark('textColor', { color })
-          .run()
+          .setMark('textStyle', { color })
+          .run();
       },
       unsetTextColor: () => ({ chain }) => {
         return chain()
-          .unsetMark('textColor')
-          .run()
+          .setMark('textStyle', { color: null })
+          .run();
       },
-    }
+    };
   },
-})
+});

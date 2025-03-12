@@ -1,0 +1,879 @@
+.drawing-component {
+  margin: 0.5rem 0;
+  position: relative;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.drawing-container {
+  width: 100%;
+  height: 300px;
+  min-height: 200px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+  background-color: transparent;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+[data-theme="dark"] .drawing-container {
+  background-color: rgba(42, 42, 42, 0.3);
+  border-color: var(--border-color);
+}
+
+.drawing-container.editing {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 2px rgba(108, 92, 231, 0.2);
+  cursor: default;
+}
+
+.drawing-canvas {
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  border: 1px dashed rgba(108, 92, 231, 0.3);
+  background-color: transparent;
+}
+
+.drawing-toolbar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: rgba(255, 255, 255, 0.9);
+  padding: 8px 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid var(--border-color);
+  z-index: 10;
+}
+
+.drawing-toolbar.mobile {
+  padding: 8px 6px;
+  flex-wrap: wrap;
+}
+
+.drawing-toolbar.mobile .drawing-tools {
+  width: 100%;
+  margin-bottom: 8px;
+  justify-content: space-between;
+}
+
+.drawing-toolbar.mobile .drawing-actions {
+  width: 100%;
+  display: flex;
+  justify-content: flex-end;
+}
+
+[data-theme="dark"] .drawing-toolbar {
+  background-color: rgba(42, 42, 42, 0.9);
+}
+
+.drawing-tools {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.tool-button,
+.color-button,
+.clear-button,
+.exit-button,
+.edit-button,
+.remove-block-button,
+.remove-block-button-overlay {
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+  padding: 0;
+}
+
+.tool-button.active {
+  background-color: var(--accent-color);
+  color: white;
+}
+
+.color-button {
+  position: relative;
+  overflow: hidden;
+}
+
+.color-tool {
+  position: relative;
+}
+
+.color-picker-dropdown {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  z-index: 20;
+  width: 280px;
+  max-width: 90vw;
+}
+
+.color-picker-header {
+  margin-bottom: 12px;
+}
+
+.current-color-preview {
+  height: 36px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: monospace;
+  font-size: 14px;
+  font-weight: bold;
+  border: 1px solid var(--border-color);
+}
+
+.color-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.color-option {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.color-option.active::after {
+  content: '';
+  position: absolute;
+  top: -3px;
+  left: -3px;
+  right: -3px;
+  bottom: -3px;
+  border: 2px solid var(--accent-color);
+  border-radius: 8px;
+  pointer-events: none;
+}
+
+.color-option:hover {
+  transform: scale(1.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.color-picker-footer {
+  margin-top: 8px;
+}
+
+.color-picker-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.color-input-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.color-input {
+  width: 36px;
+  height: 36px;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.color-text-input {
+  flex: 1;
+  height: 36px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+  padding: 0 8px;
+  font-family: monospace;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.stroke-width-selector {
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.tool-button:hover,
+.color-button:hover,
+.clear-button:hover,
+.exit-button:hover,
+.edit-button:hover,
+.remove-block-button:hover,
+.remove-block-button-overlay:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="dark"] .tool-button:hover,
+[data-theme="dark"] .color-button:hover,
+[data-theme="dark"] .clear-button:hover,
+[data-theme="dark"] .exit-button:hover,
+[data-theme="dark"] .edit-button:hover,
+[data-theme="dark"] .remove-block-button:hover,
+[data-theme="dark"] .remove-block-button-overlay:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.drawing-overlay {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 10;
+  display: flex;
+  gap: 8px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.drawing-container:hover .drawing-overlay {
+  opacity: 1;
+}
+
+.empty-drawing {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+
+.empty-drawing svg {
+  font-size: 2rem;
+  margin-bottom: 8px;
+}
+
+.confirm-delete-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 30;
+}
+
+.confirm-delete-dialog {
+  background-color: var(--bg-primary);
+  border-radius: 8px;
+  padding: 16px;
+  width: 80%;
+  max-width: 300px;
+  text-align: center;
+}
+
+.confirm-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.confirm-buttons button {
+  padding: 8px 16px;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.confirm-buttons .confirm-delete {
+  background-color: #ff4d4f;
+  color: white;
+  border-color: #ff4d4f;
+}
+
+/* Stili per dispositivi mobili */
+@media (max-width: 767px) {
+  .drawing-component {
+    margin: 0.5rem 0;
+    max-width: 100%;
+  }
+  
+  .drawing-container {
+    min-height: 200px;
+    height: 50vh;
+    max-height: 400px;
+    border-radius: 6px;
+    background-color: transparent;
+  }
+  
+  .drawing-toolbar.mobile {
+    padding: 6px 4px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    justify-content: flex-start;
+    height: auto;
+    max-height: 60px;
+    background-color: var(--bg-primary);
+    border-radius: 8px;
+    margin: 0 auto;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 95%;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  }
+  
+  [data-theme="dark"] .drawing-toolbar.mobile {
+    background-color: rgba(42, 42, 42, 0.9);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+  
+  .drawing-tools {
+    display: flex;
+    gap: 4px;
+    flex-wrap: nowrap;
+    padding-right: 8px;
+  }
+  
+  .tool-button,
+  .color-button,
+  .clear-button,
+  .exit-button,
+  .edit-button,
+  .remove-block-button,
+  .remove-block-button-overlay {
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
+    margin: 0 2px;
+  }
+  
+  /* Migliora la visibilità del pulsante attivo */
+  .tool-button.active,
+  .width-button.active,
+  .color-button.active {
+    transform: scale(1.1);
+    box-shadow: 0 0 0 2px var(--accent-color);
+  }
+  
+  /* Aggiungi un indicatore di scorrimento */
+  .drawing-toolbar.mobile::after {
+    content: '';
+    display: block;
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 24px;
+    background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.8));
+    pointer-events: none;
+  }
+  
+  [data-theme="dark"] .drawing-toolbar.mobile::after {
+    background: linear-gradient(to right, transparent, rgba(42, 42, 42, 0.8));
+  }
+  
+  /* Ottimizza il color picker per mobile */
+  .color-picker-dropdown.compact {
+    bottom: 70px;
+    width: 180px;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    z-index: 1001;
+  }
+}
+
+/* Stili per il tema scuro */
+[data-theme="dark"] .confirm-delete-dialog {
+  background-color: #333;
+}
+
+[data-theme="dark"] .confirm-buttons button {
+  background-color: #444;
+  border-color: #555;
+}
+
+[data-theme="dark"] .confirm-buttons .confirm-delete {
+  background-color: #ff4d4f;
+  border-color: #ff4d4f;
+}
+
+[data-theme="dark"] .color-picker-dropdown {
+  background-color: #333;
+  border-color: #555;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] .current-color-preview {
+  border-color: #555;
+}
+
+[data-theme="dark"] .color-text-input {
+  background-color: #444;
+  border-color: #555;
+  color: #eee;
+}
+
+/* Animazione per il pulsante di rimozione */
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+.remove-block-button-overlay {
+  animation: pulse 2s infinite;
+}
+
+/* Migliora la visibilità dei tratti */
+.drawing-canvas path,
+.drawing-canvas line {
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Stili per i pulsanti di dimensione del tratto */
+.stroke-width-buttons {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.width-button {
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+  padding: 0;
+}
+
+.width-button.active {
+  background-color: var(--accent-color);
+  color: white;
+}
+
+.width-button:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="dark"] .width-button:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Ottimizzazione per la gomma */
+.eraser-cursor {
+  position: absolute;
+  border: 1.5px solid #ff0000;
+  border-radius: 50%;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+  z-index: 100;
+  background-color: rgba(255, 0, 0, 0.1);
+}
+
+/* Animazione per la gomma attiva */
+@keyframes pulse-eraser {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+.tool-button[title="Gomma"].active {
+  animation: pulse-eraser 2s infinite;
+}
+
+/* Stili per il tema scuro */
+[data-theme="dark"] .tool-button[title="Gomma"].active {
+  background-color: rgba(255, 0, 0, 0.3);
+}
+
+/* Versione compatta del color picker ottimizzata per mobile */
+.color-picker-dropdown.compact {
+  width: 180px;
+  padding: 8px;
+  margin-bottom: 8px;
+  position: fixed;
+  bottom: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+}
+
+/* Aggiungi un overlay per chiudere il color picker toccando fuori */
+.color-picker-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 999;
+  background-color: rgba(0, 0, 0, 0.2);
+}
+
+.color-picker-dropdown.compact .color-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.color-picker-dropdown.compact .color-option {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+}
+
+.color-picker-dropdown.compact .color-input-container {
+  display: flex;
+  justify-content: center;
+}
+
+.color-picker-dropdown.compact .color-input {
+  width: 100%;
+  height: 32px;
+  border-radius: 6px;
+}
+
+/* Stili per dispositivi mobili */
+@media (max-width: 767px) {
+  .color-picker-dropdown.compact {
+    width: 220px;
+    padding: 12px;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  }
+  
+  .color-picker-dropdown.compact .color-grid {
+    gap: 10px;
+  }
+  
+  .color-picker-dropdown.compact .color-option {
+    width: 50px;
+    height: 50px;
+    border-radius: 10px;
+    border-width: 2px;
+  }
+  
+  .color-picker-dropdown.compact .color-option.active::after {
+    border-width: 3px;
+  }
+  
+  /* Animazione di entrata per il color picker */
+  @keyframes slideUp {
+    from { transform: translate(-50%, 20px); opacity: 0; }
+    to { transform: translate(-50%, 0); opacity: 1; }
+  }
+  
+  .color-picker-dropdown.compact {
+    animation: slideUp 0.2s ease-out;
+  }
+  
+  /* Stile per il pulsante colore attivo */
+  .color-button.active {
+    transform: scale(1.1);
+    box-shadow: 0 0 0 2px var(--accent-color);
+  }
+}
+
+/* Stili per schermi molto piccoli */
+@media (max-width: 360px) {
+  .color-picker-dropdown.compact {
+    width: 180px;
+  }
+  
+  .color-picker-dropdown.compact .color-option {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+/* Stili per il tema scuro */
+[data-theme="dark"] .color-picker-dropdown.compact {
+  background-color: #333;
+  border-color: #555;
+}
+
+[data-theme="dark"] .color-picker-overlay {
+  background-color: rgba(0, 0, 0, 0.5);
+}
+
+/* Aggiungi un pulsante per espandere/contrarre il canvas */
+.expand-canvas-button {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.8);
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 5;
+}
+
+[data-theme="dark"] .expand-canvas-button {
+  background-color: rgba(42, 42, 42, 0.8);
+}
+
+/* Stile per il canvas espanso */
+.drawing-container.expanded {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: calc(100vh - 120px);
+  max-height: 100%;
+  width: 100%;
+  z-index: 100;
+  border-radius: 8px;
+  margin: 0;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="dark"] .drawing-container.expanded {
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+}
+
+/* Stile per la toolbar in modalità espansa */
+.drawing-container.expanded .drawing-toolbar.mobile {
+  border-radius: 12px;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90%;
+  max-width: 400px;
+  background-color: var(--bg-primary);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+}
+
+/* Migliora l'aspetto del pulsante di uscita */
+.exit-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 12px;
+  height: 36px;
+  border-radius: 18px;
+  background-color: var(--accent-color);
+  color: white;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.exit-button:hover {
+  background-color: var(--accent-color);
+  opacity: 0.9;
+  transform: translateY(-2px);
+}
+
+.exit-button-text {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* Aggiungi stili per il messaggio informativo */
+.drawing-info-overlay {
+  position: absolute;
+  bottom: 10px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 5;
+  opacity: 0;
+  animation: fadeIn 0.3s ease forwards;
+  animation-delay: 0.5s;
+}
+
+.drawing-info-message {
+  background-color: rgba(255, 255, 255, 0.9);
+  color: var(--text-primary);
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 14px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  max-width: 90%;
+  text-align: center;
+}
+
+[data-theme="dark"] .drawing-info-message {
+  background-color: rgba(42, 42, 42, 0.9);
+  color: var(--text-primary);
+}
+
+/* Aggiungi un indicatore visivo quando si passa sopra il blocco di disegno */
+.drawing-container:not(.editing):hover {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 1px rgba(108, 92, 231, 0.2);
+}
+
+/* Assicurati che il canvas non interferisca con il testo */
+.ProseMirror .drawing-component {
+  margin: 1.5rem 0;
+  position: relative;
+  clear: both;
+}
+
+/* Stili per dispositivi mobili */
+@media (max-width: 767px) {
+  .exit-button {
+    padding: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+  }
+  
+  .drawing-info-message {
+    font-size: 12px;
+    padding: 6px 12px;
+  }
+}
+
+/* Stile per il pulsante di salvataggio */
+.save-drawing-button {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background-color: var(--accent-color);
+  color: white;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  transition: all 0.2s ease;
+  z-index: 100;
+}
+
+.save-drawing-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.save-drawing-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Stile per l'indicatore di drag and drop */
+.drag-handle-indicator {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  background-color: rgba(255, 255, 255, 0.8);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.drawing-component:hover .drag-handle-indicator {
+  opacity: 1;
+}
+
+/* Stile per il blocco durante il drag */
+.drawing-component.dragging {
+  opacity: 0.6;
+}
+
+.drawing-component.dragging .drawing-container {
+  box-shadow: 0 0 0 2px var(--accent-color);
+}
+
+/* Ottimizzazione per il drag and drop */
+.drawing-component {
+  position: relative;
+  margin: 1.5rem 0;
+  cursor: grab;
+  transition: all 0.2s ease;
+}
+
+.drawing-component[contenteditable="false"] {
+  user-select: none;
+}
+
+.drawing-component .drawing-container.editing {
+  cursor: default;
+}
+
+/* Tema scuro */
+[data-theme="dark"] .drag-handle-indicator {
+  background-color: rgba(42, 42, 42, 0.8);
+  color: var(--text-secondary);
+}
+
+[data-theme="dark"] .save-drawing-button {
+  background-color: var(--accent-color);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+/* Stili per dispositivi mobili */
+@media (max-width: 767px) {
+  .save-drawing-button {
+    width: 44px;
+    height: 44px;
+    bottom: 16px;
+    right: 16px;
+  }
+  
+  .drag-handle-indicator {
+    width: 28px;
+    height: 28px;
+  }
+} 

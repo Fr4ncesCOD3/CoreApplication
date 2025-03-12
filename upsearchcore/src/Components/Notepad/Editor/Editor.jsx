@@ -12,13 +12,16 @@ import BulletList from '@tiptap/extension-bullet-list'
 import OrderedList from '@tiptap/extension-ordered-list'
 import ListItem from '@tiptap/extension-list-item'
 import History from '@tiptap/extension-history'
-import Placeholder from '@tiptap/extension-placeholder'
 import Link from '@tiptap/extension-link'
 import TextStyle from '@tiptap/extension-text-style'
+import Placeholder from '@tiptap/extension-placeholder'
+import TextAlign from '@tiptap/extension-text-align'
 import { Button, ButtonGroup, ButtonToolbar, Dropdown, Form, Modal, OverlayTrigger, Popover, Tooltip } from 'react-bootstrap'
-import { FiBold, FiItalic, FiCode, FiType, FiList, FiLink, FiX, FiDroplet } from 'react-icons/fi'
-import { MdFormatSize, MdArrowDropDown } from 'react-icons/md'
+import { FiBold, FiItalic, FiCode, FiType, FiList, FiLink, FiX, FiDroplet, FiUnderline, FiMessageSquare, FiAlignLeft, FiAlignCenter, FiAlignRight, FiTrash2, FiHash, FiEdit3, FiFile } from 'react-icons/fi'
+import { MdFormatSize, MdArrowDropDown, MdFormatColorText } from 'react-icons/md'
 import { IoColorPaletteOutline } from 'react-icons/io5'
+import DrawingNode from './DrawingNode'
+import DocumentNode from './DocumentNode'
 import './Editor.css'
 
 // Funzione di utilità per il debounce
@@ -77,6 +80,23 @@ export const FontSize = Extension.create({
   },
 });
 
+// Definisci i colori principali da mostrare nella barra degli strumenti mobile
+const mainColors = [
+  '#000000', // nero
+  '#D50000', // rosso
+  '#039BE5', // blu
+  '#0B8043', // verde
+  '#F6BF26'  // giallo
+];
+
+// Definisci tutti i colori per la palette completa
+const colorOptions = [
+  '#000000', '#434343', '#666666', '#999999', '#b7b7b7', '#cccccc',
+  '#d50000', '#e67c73', '#f4511e', '#f6bf26', '#33b679', '#0b8043',
+  '#039be5', '#3f51b5', '#7986cb', '#8e24aa', '#d81b60', '#ad1457',
+  '#c0ca33', '#e4c441', '#fb8c00', '#fa573c', '#a52714', '#0097a7'
+];
+
 // Componente Editor
 const Editor = ({ onContentChange, initialContent }) => {
   // Stati per gestire i vari aspetti dell'editor
@@ -105,25 +125,105 @@ const Editor = ({ onContentChange, initialContent }) => {
   // Aggiungi queste funzioni al componente Editor
   const [showMobileFontSizeTool, setShowMobileFontSizeTool] = useState(false)
   const [showMobileColorPicker, setShowMobileColorPicker] = useState(false)
-  const [selectedColor, setSelectedColor] = useState(null)
+  const [selectedColor, setSelectedColor] = useState('#000000')
   const [currentFontSize, setCurrentFontSize] = useState(16)
   const colorPickerRef = useRef(null)
   const fontSizeToolRef = useRef(null)
-  
-  // Colori predefiniti per la palette mobile
-  const colorOptions = [
-    '#000000', '#434343', '#666666', '#999999', '#b7b7b7', '#cccccc',
-    '#d50000', '#e67c73', '#f4511e', '#f6bf26', '#33b679', '#0b8043',
-    '#039be5', '#3f51b5', '#7986cb', '#8e24aa', '#d81b60', '#ad1457',
-    '#c0ca33', '#e4c441', '#fb8c00', '#fa573c', '#a52714', '#0097a7'
-  ]
   
   // Dimensioni di testo predefinite
   const fontSizePresets = [12, 14, 16, 18, 20, 24, 28, 32, 36, 42]
   
   // Aggiungi uno stato per tracciare l'ultima azione
   const [lastAction, setLastAction] = useState(null);
-  
+
+  // Aggiungi uno stato per il caricamento
+  const [isLoading, setIsLoading] = useState(false);
+
+  const handleInput = () => {
+    console.log('📝 Editor input/update rilevato')
+    
+    // Assicurati che tutti i nodi di disegno abbiano i loro attributi aggiornati
+    if (editor) {
+      const json = editor.getJSON()
+      
+      // Controlla se ci sono nodi di disegno nel contenuto
+      const hasDrawings = json.content.some(node => 
+        node.type === 'drawing' || 
+        (node.content && node.content.some(child => child.type === 'drawing'))
+      )
+      
+      // Se ci sono disegni, assicurati che vengano salvati correttamente
+      if (hasDrawings) {
+        // Forza un aggiornamento dell'editor per assicurarsi che tutti gli attributi siano aggiornati
+        setTimeout(() => {
+          if (onContentChange) {
+            onContentChange(editor.getHTML())
+          }
+        }, 100)
+      } else {
+        // Comportamento normale
+        if (onContentChange) {
+          onContentChange(editor.getHTML())
+        }
+      }
+    }
+  }
+
+  const handleSelectionChange = () => {
+    console.log('🔍 Editor selection change rilevato')
+    // Rimuoviamo qualsiasi logica che potrebbe influenzare i modali
+  }
+
+  // Modifichiamo la gestione del tap per evitare aperture indesiderate
+  const handleTap = (e) => {
+    if (!isMobile) return
+    
+    // Verifichiamo che il tap sia su un pulsante specifico
+    const isToolbarButton = e.target.closest('.mobile-toolbar-btn')
+    if (!isToolbarButton) {
+      // Se non è un pulsante della toolbar, chiudiamo i modali
+      setShowMobileFontSizeTool(false)
+      setShowMobileColorPicker(false)
+    }
+  }
+
+  const handleMobileFontSizeToggleButton = () => {
+    console.log('📏 Toggle font size tool');
+    
+    // Chiudi l'altro modale se aperto
+    if (showColorPicker) {
+      setShowColorPicker(false);
+    }
+    
+    // Controlla se stiamo aprendo o chiudendo
+    if (!showMobileFontSizeTool) {
+      console.log("🔍 Apertura font size tool");
+      // Applica immediatamente la dimensione corrente
+      const detectedSize = detectFontSize();
+      setCurrentFontSize(parseInt(detectedSize) || 16);
+      
+      // Stiamo aprendo il tool
+      document.body.classList.add('font-size-tool-open');
+      document.body.style.overflow = 'hidden';
+    } else {
+      console.log("🔍 Chiusura font size tool");
+      // Stiamo chiudendo il tool
+      document.body.classList.remove('font-size-tool-open');
+      document.body.style.overflow = '';
+    }
+    
+    // Inverti lo stato
+    setShowMobileFontSizeTool(prev => !prev);
+    setLastAction("font-size-toggle");
+  };
+
+  const handleMobileColorPickerToggle = () => {
+    console.log('🎨 Toggle color picker')
+    setLastAction('color')
+    setShowMobileColorPicker(prev => !prev)
+    setShowMobileFontSizeTool(false) // Chiudi l'altro modale
+  }
+
   // Configurazione dell'editor TipTap
   const editor = useEditor({
     extensions: [
@@ -142,14 +242,24 @@ const Editor = ({ onContentChange, initialContent }) => {
       ListItem,
       History,
       Placeholder.configure({
-        placeholder: 'Inizia a scrivere...',
+        placeholder: '',
       }),
       Link.configure({
         openOnClick: true,
         validate: href => /^https?:\/\//.test(href),
       }),
-      TextStyle,
+      TextStyle.configure({
+        HTMLAttributes: {
+          class: 'text-styled',
+        },
+      }),
+      TextAlign.configure({
+        types: ['heading', 'paragraph'],
+        defaultAlignment: 'left',
+      }),
       FontSize,
+      DrawingNode,
+      DocumentNode,
       Extension.create({
         name: 'fontSizePersistence',
         
@@ -243,11 +353,9 @@ const Editor = ({ onContentChange, initialContent }) => {
       },
     },
     content: initialContent || '',
-    onUpdate: ({ editor }) => {
-      if (onContentChange) {
-        onContentChange(editor.getHTML())
-      }
-    },
+    onUpdate: handleInput,
+    autofocus: false,
+    editable: true,
   })
   
   // Effetto per applicare la dimensione del testo salvata quando l'editor viene inizializzato
@@ -264,7 +372,7 @@ const Editor = ({ onContentChange, initialContent }) => {
   
   // Funzione per mostrare i tooltip
   const renderTooltip = (props, text) => (
-    <Tooltip id={`tooltip-${text.toLowerCase().replace(/\s+/g, '-')}`} {...props}>
+    <Tooltip id="button-tooltip" {...props}>
       {text}
     </Tooltip>
   )
@@ -319,21 +427,6 @@ const Editor = ({ onContentChange, initialContent }) => {
     setShowLinkModal(false)
     setLinkUrl('')
   }, [editor, linkUrl])
-  
-  // Funzione per applicare il colore al testo
-  const applyTextColor = (color) => {
-    if (!editor) return;
-    
-    editor.chain().focus().run();
-    
-    // Implementazione per applicare il colore
-    try {
-      document.execCommand('styleWithCSS', false, true);
-      document.execCommand('foreColor', false, color);
-    } catch (e) {
-      console.warn('Errore nell\'applicare il colore:', e);
-    }
-  };
   
   // Modifica la funzione applyFontSize per salvare la dimensione corrente
   const applyFontSize = (size) => {
@@ -415,9 +508,6 @@ const Editor = ({ onContentChange, initialContent }) => {
           setFontSize(detectedSize);
         }
       }
-    } else {
-      // Su desktop, usa il comportamento esistente
-      // ... existing desktop behavior ...
     }
   }
   
@@ -634,142 +724,149 @@ const Editor = ({ onContentChange, initialContent }) => {
   // Variabile per tracciare i tap
   let lastTap = 0;
   
-  // Modifica la funzione MobileToolbar per renderla scrollabile orizzontalmente
+  // Modifica il componente MobileToolbar per migliorare la gestione del touch
   const MobileToolbar = () => {
-    if (!isMobileDevice || !editor) return null;
-    
-    // Riferimento per lo scroll orizzontale
-    const toolbarScrollRef = useRef(null);
-    
-    // Variabili per gli indicatori di scorrimento
-    const [hasMoreLeft, setHasMoreLeft] = useState(false);
-    const [hasMoreRight, setHasMoreRight] = useState(true);
-    
-    // Funzione per gestire i click sui pulsanti della toolbar
-    const handleToolbarButtonClick = (action) => {
-      console.log("🔘 Toolbar button clicked");
-      
-      // Esegui l'azione
-      action();
-      
-      console.log("🔘 Azione della toolbar completata");
-    };
-    
-    // Effetto per gestire gli indicatori di scorrimento
-    useEffect(() => {
-      if (toolbarScrollRef.current) {
-        const checkScroll = () => {
-          const { scrollLeft, scrollWidth, clientWidth } = toolbarScrollRef.current;
-          setHasMoreLeft(scrollLeft > 10);
-          setHasMoreRight(scrollLeft + clientWidth < scrollWidth - 10);
-        };
+    // Aggiungi questa funzione per gestire meglio i tocchi sui pulsanti
+    const handleToolbarButtonTouch = (action) => {
+      // Previeni il comportamento di default del browser
+      if (editor) {
+        // Applica l'azione immediatamente
+        action();
         
-        checkScroll();
-        toolbarScrollRef.current.addEventListener('scroll', checkScroll);
+        // Fornisci feedback tattile se disponibile
+        if (window.navigator && window.navigator.vibrate) {
+          window.navigator.vibrate(50); // Vibrazione leggera di 50ms
+        }
         
-        return () => {
-          if (toolbarScrollRef.current) {
-            toolbarScrollRef.current.removeEventListener('scroll', checkScroll);
-          }
-        };
+        // Assicurati che l'editor mantenga il focus
+        setTimeout(() => {
+          editor.commands.focus();
+        }, 10);
       }
-    }, [toolbarScrollRef]);
-    
+    };
+
     return (
       <div className="mobile-toolbar-container">
-        <div className={`mobile-toolbar ${hasMoreLeft ? 'has-more-left' : ''} ${hasMoreRight ? 'has-more-right' : ''}`}>
-          <div className="mobile-toolbar-scroll" ref={toolbarScrollRef}>
-            <Button 
-              variant={editor.isActive('bold') ? 'primary' : 'light'}
-              onClick={() => handleToolbarButtonClick(() => editor.chain().focus().toggleBold().run())}
-              className="mobile-toolbar-btn"
+        <div className="mobile-toolbar">
+          <div className="mobile-toolbar-scroll">
+            {/* Gruppo per la formattazione del testo */}
+            <Button
+              variant="link"
+              className={`mobile-toolbar-btn ${editor && editor.isActive('bold') ? 'active' : ''}`}
+              onClick={() => handleToolbarButtonTouch(() => editor.chain().focus().toggleBold().run())}
+              aria-label="Grassetto"
             >
               <FiBold />
             </Button>
-            <Button 
-              variant={editor.isActive('italic') ? 'primary' : 'light'}
-              onClick={() => handleToolbarButtonClick(() => editor.chain().focus().toggleItalic().run())}
-              className="mobile-toolbar-btn"
+            
+            <Button
+              variant="link"
+              className={`mobile-toolbar-btn ${editor && editor.isActive('italic') ? 'active' : ''}`}
+              onClick={() => handleToolbarButtonTouch(() => editor.chain().focus().toggleItalic().run())}
+              aria-label="Corsivo"
             >
               <FiItalic />
             </Button>
-            <Button 
-              variant={editor.isActive('code') ? 'primary' : 'light'}
-              onClick={() => handleToolbarButtonClick(() => editor.chain().focus().toggleCode().run())}
-              className="mobile-toolbar-btn"
+            
+            <Button
+              variant="link"
+              className={`mobile-toolbar-btn ${editor && editor.isActive('code') ? 'active' : ''}`}
+              onClick={() => handleToolbarButtonTouch(() => editor.chain().focus().toggleCode().run())}
+              aria-label="Codice"
             >
               <FiCode />
             </Button>
-            <Button 
-              variant={editor.isActive('heading', { level: 1 }) ? 'primary' : 'light'}
-              onClick={() => handleToolbarButtonClick(() => editor.chain().focus().toggleHeading({ level: 1 }).run())}
-              className="mobile-toolbar-btn"
+            
+            {/* Gruppo per i titoli */}
+            <Button
+              variant="link"
+              className={`mobile-toolbar-btn ${editor && editor.isActive('heading', { level: 1 }) ? 'active' : ''}`}
+              onClick={() => handleToolbarButtonTouch(() => editor.chain().focus().toggleHeading({ level: 1 }).run())}
+              aria-label="Titolo 1"
             >
               <span className="btn-text">H1</span>
             </Button>
-            <Button 
-              variant={editor.isActive('heading', { level: 2 }) ? 'primary' : 'light'}
-              onClick={() => handleToolbarButtonClick(() => editor.chain().focus().toggleHeading({ level: 2 }).run())}
-              className="mobile-toolbar-btn"
+            
+            <Button
+              variant="link"
+              className={`mobile-toolbar-btn ${editor && editor.isActive('heading', { level: 2 }) ? 'active' : ''}`}
+              onClick={() => handleToolbarButtonTouch(() => editor.chain().focus().toggleHeading({ level: 2 }).run())}
+              aria-label="Titolo 2"
             >
               <span className="btn-text">H2</span>
             </Button>
-            <Button 
-              variant={editor.isActive('heading', { level: 3 }) ? 'primary' : 'light'}
-              onClick={() => handleToolbarButtonClick(() => editor.chain().focus().toggleHeading({ level: 3 }).run())}
-              className="mobile-toolbar-btn"
+            
+            <Button
+              variant="link"
+              className={`mobile-toolbar-btn ${editor && editor.isActive('heading', { level: 3 }) ? 'active' : ''}`}
+              onClick={() => handleToolbarButtonTouch(() => editor.chain().focus().toggleHeading({ level: 3 }).run())}
+              aria-label="Titolo 3"
             >
               <span className="btn-text">H3</span>
             </Button>
-            <Button 
-              variant={editor.isActive('bulletList') ? 'primary' : 'light'}
-              onClick={() => handleToolbarButtonClick(() => editor.chain().focus().toggleBulletList().run())}
-              className="mobile-toolbar-btn"
+            
+            {/* Gruppo per le liste */}
+            <Button
+              variant="link"
+              className={`mobile-toolbar-btn ${editor && editor.isActive('bulletList') ? 'active' : ''}`}
+              onClick={() => handleToolbarButtonTouch(() => editor.chain().focus().toggleBulletList().run())}
+              aria-label="Elenco puntato"
             >
               <FiList />
             </Button>
-            <Button 
-              variant={editor.isActive('orderedList') ? 'primary' : 'light'}
-              onClick={() => handleToolbarButtonClick(() => editor.chain().focus().toggleOrderedList().run())}
-              className="mobile-toolbar-btn"
-            >
-              <span className="btn-text">1.</span>
+            
+            <Button
+              variant="link"
+              className={`mobile-toolbar-btn ${editor && editor.isActive('orderedList') ? 'active' : ''}`}
+              onClick={() => handleToolbarButtonTouch(() => editor.chain().focus().toggleOrderedList().run())}
+                aria-label="Elenco numerato"
+              >
+                <FiHash />
+              </Button>
+            
+            {/* Gruppo per la personalizzazione del testo */}
+                          <Button 
+              variant="link"
+              className={`mobile-toolbar-btn ${showMobileFontSizeTool ? 'active' : ''}`}
+              onClick={() => handleToolbarButtonTouch(handleMobileFontSizeToggleButton)}
+                  aria-label="Dimensione testo"
+                >
+                  <MdFormatSize />
+              <span className="btn-text">{fontSize}</span>
             </Button>
             
-            {/* Pulsante dimensione testo */}
-            <Button 
-              variant={showMobileFontSizeTool ? 'primary' : 'light'}
-              onClick={() => handleToolbarButtonClick(handleMobileFontSizeToggle)}
-              className="mobile-toolbar-btn"
-            >
-              <FiType size={20} />
-              <span className="btn-text">Testo</span>
-            </Button>
-            
-            <Button 
-              variant={editor.isActive('link') ? 'primary' : 'light'}
-              onClick={() => handleToolbarButtonClick(handleSetLink)}
-              className="mobile-toolbar-btn"
+            {/* Pulsante per i link */}
+            <Button
+              variant="link"
+              className={`mobile-toolbar-btn ${editor && editor.isActive('link') ? 'active' : ''}`}
+              onClick={() => handleToolbarButtonTouch(handleSetLink)}
+              aria-label="Inserisci link"
             >
               <FiLink />
             </Button>
             
-            {/* Pulsante colore testo - Versione corretta */}
-            <Button 
-              variant={showMobileColorPicker ? 'primary' : 'light'}
-              onClick={() => handleToolbarButtonClick(handleMobileColorPickerToggle)}
-              className="mobile-toolbar-btn"
-              aria-label="Colore testo"
+            {/* Aggiungi il pulsante di disegno */}
+            <Button
+              variant="link"
+              className="mobile-toolbar-btn drawing-btn"
+              onClick={() => handleToolbarButtonTouch(insertDrawing)}
+              aria-label="Disegno a mano libera"
             >
-              <FiDroplet size={20} />
-              <span className="btn-text">Colore</span>
+              <FiEdit3 />
+              <span className="btn-text">Disegno</span>
             </Button>
+            
+            {/* Aggiungi il pulsante per inserire documenti */}
+            <button
+              className={`mobile-toolbar-btn`}
+              onClick={insertDocument}
+              title="Inserisci documento"
+            >
+              <FiFile />
+              <span className="btn-text">Documento</span>
+            </button>
           </div>
         </div>
-        
-        {/* Aggiungi i componenti per gli strumenti mobile */}
-        <MobileFontSizeTool />
-        <MobileColorPicker />
       </div>
     );
   };
@@ -833,47 +930,17 @@ const Editor = ({ onContentChange, initialContent }) => {
     };
   }, [editor, isMobileDevice]);
   
-  // Modifica il componente FocusButton per aggiungere una transizione
-  const FocusButton = () => {
-    const [isHiding, setIsHiding] = useState(false);
-    
-    // Mostra il pulsante solo se necessario
-    if (!isMobileDevice || isEditorFocused || hasInteracted) return null;
-    
-    return (
-      <button 
-        className={`mobile-focus-button ${isHiding ? 'hiding' : ''}`}
-        onClick={() => {
-          // Avvia l'animazione di scomparsa
-          setIsHiding(true);
-          
-          // Dopo l'animazione, aggiorna gli stati
-          setTimeout(() => {
-            if (editorRef.current) {
-              editorRef.current.focus();
-              setIsEditorFocused(true);
-              setHasInteracted(true);
-              localStorage.setItem('editorHasInteracted', 'true');
-            }
-          }, 300); // Durata dell'animazione
-        }}
-      >
-        Tocca qui per scrivere
-      </button>
-    );
-  };
-  
   // Funzione per gestire il toggle delle opzioni mobile
-  const toggleMobileOptions = () => {
-    setShowMobileOptions(prevState => !prevState);
-    
-    // Chiudi automaticamente le opzioni dopo un po' di tempo
-    if (!showMobileOptions) {
-      setTimeout(() => {
-        setShowMobileOptions(false);
-      }, 5000); // Chiudi dopo 5 secondi di inattività
-    }
-  };
+  // const toggleMobileOptions = () => {
+  //   setShowMobileOptions(prevState => !prevState);
+  //   
+  //   // Chiudi automaticamente le opzioni dopo un po' di tempo
+  //   if (!showMobileOptions) {
+  //     setTimeout(() => {
+  //       setShowMobileOptions(false);
+  //     }, 5000); // Chiudi dopo 5 secondi di inattività
+  //   }
+  // };
   
   // Aggiungi questo effetto per migliorare l'esperienza di scrolling
   useEffect(() => {
@@ -903,268 +970,43 @@ const Editor = ({ onContentChange, initialContent }) => {
     };
   }, [isMobileDevice]);
   
-  // Gestione del font size su mobile
-  const handleMobileFontSizeToggle = () => {
-    console.log("🔍 handleMobileFontSizeToggle chiamato");
-    console.log("🔍 Stack trace:", new Error().stack);
-    console.trace("Traccia completa font size toggle");
-    
-    // Chiudi l'altro modale se aperto
-    if (showMobileColorPicker) {
-      setShowMobileColorPicker(false);
-      document.body.classList.remove('color-picker-open');
-    }
-    
-    // Controlla se stiamo aprendo o chiudendo
-    if (!showMobileFontSizeTool) {
-      console.log("🔍 Apertura font size tool");
-      // Applica immediatamente la dimensione corrente
-      const fontSize = detectFontSize();
-      setCurrentFontSize(parseInt(fontSize) || 16);
-      
-      // Stiamo aprendo il tool
-      document.body.classList.add('font-size-tool-open');
-      document.body.style.overflow = 'hidden';
-    } else {
-      console.log("🔍 Chiusura font size tool");
-      // Stiamo chiudendo il tool
-      document.body.classList.remove('font-size-tool-open');
-      document.body.style.overflow = '';
-    }
-    
-    // Inverti lo stato DOPO aver verificato la condizione precedente
-    setShowMobileFontSizeTool(prev => !prev);
-    setLastAction("font-size-toggle-" + new Date().getTime());
-  };
-  
-  // Gestione della palette colori su mobile
-  const handleMobileColorPickerToggle = () => {
-    console.log("🎨 handleMobileColorPickerToggle chiamato");
-    console.log("🎨 Stack trace:", new Error().stack);
-    console.trace("Traccia completa color picker toggle");
-    
-    // Chiudi l'altro modale se aperto
-    if (showMobileFontSizeTool) {
-      setShowMobileFontSizeTool(false);
-      document.body.classList.remove('font-size-tool-open');
-    }
-    
-    // Controlla se stiamo aprendo o chiudendo
-    if (!showMobileColorPicker) {
-      console.log("🎨 Apertura color picker");
-      // Stiamo aprendo la palette
-      document.body.classList.add('color-picker-open');
-      document.body.style.overflow = 'hidden';
-    } else {
-      console.log("🎨 Chiusura color picker");
-      // Stiamo chiudendo la palette
-      document.body.classList.remove('color-picker-open');
-      document.body.style.overflow = '';
-    }
-    
-    // Inverti lo stato DOPO aver verificato la condizione precedente
-    setShowMobileColorPicker(prev => !prev);
-    setLastAction("color-picker-toggle-" + new Date().getTime());
-  };
-  
-  // Chiusura degli strumenti quando si tocca fuori
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (
-        showMobileFontSizeTool && 
-        fontSizeToolRef.current && 
-        !fontSizeToolRef.current.contains(event.target)
-      ) {
-        setShowMobileFontSizeTool(false)
-        document.body.style.overflow = ''
-        document.body.classList.remove('font-size-tool-open')
-      }
-      
-      if (
-        showMobileColorPicker && 
-        colorPickerRef.current && 
-        !colorPickerRef.current.contains(event.target)
-      ) {
-        setShowMobileColorPicker(false)
-        document.body.style.overflow = ''
-      }
-    }
-    
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [showMobileFontSizeTool, showMobileColorPicker])
-  
   // Applicazione della dimensione del testo da mobile
   const applyMobileFontSize = (size) => {
     setCurrentFontSize(size)
     applyFontSize(size + 'px')
   }
   
-  // Applicazione del colore da mobile
-  const applyMobileColor = (color) => {
-    if (!editor) return;
-    
-    // Salva il colore selezionato
-    setSelectedColor(color);
-    
-    // Applica il colore al testo selezionato usando l'API di TipTap
-    editor
-      .chain()
-      .focus()
-      .setMark('textStyle', { color: color })
-      .run();
-    
-    // Chiudi il modale dopo aver applicato il colore
-    setShowMobileColorPicker(false);
-    document.body.style.overflow = '';
-    
-    // Log per debug
-    console.log("Colore applicato:", color);
-  }
-  
-  // Aggiungi questi componenti all'interno del componente Editor
-  
-  // Componente per la selezione della dimensione del testo su mobile
-  const MobileFontSizeTool = () => {
-    console.log("📏 Rendering font size tool, visible:", showMobileFontSizeTool, "last action:", lastAction);
-    
-    return (
-      <>
-        {/* Aggiungi un overlay più visibile */}
-        <div 
-          className={`tool-overlay ${showMobileFontSizeTool ? 'active' : ''}`}
-          style={{ zIndex: 1999 }}
+  // Componente per la palette colori desktop
+  const ColorPickerPopover = (
+    <Popover id="color-picker-popover" className="color-picker-popover">
+      <Popover.Header as="h3">Colore testo</Popover.Header>
+      <Popover.Body>
+        <div className="color-picker-grid">
+          {colorOptions.map((color) => (
+            <button
+              key={color}
+              className={`color-option ${selectedColor === color ? 'active' : ''}`}
+              style={{ backgroundColor: color }}
               onClick={() => {
-            console.log("Overlay clicked");
-            setShowMobileFontSizeTool(false);
-            document.body.style.overflow = '';
-            document.body.classList.remove('font-size-tool-open');
-          }}
-        ></div>
-        
-        <div 
-          ref={fontSizeToolRef}
-          className={`mobile-font-size-tool ${showMobileFontSizeTool ? 'active' : ''}`}
-          style={{ zIndex: 2000 }}
-        >
-          <div className="swipe-indicator"></div>
-          <div className="tool-header">
-            <h3>Dimensione testo</h3>
-            <button 
-              className="close-btn" 
-              onClick={() => {
-                console.log("Font size button clicked");
-                setShowMobileFontSizeTool(false);
-                document.body.style.overflow = '';
-                document.body.classList.remove('font-size-tool-open');
+                // applyTextColor(color);
               }}
-            >
-              <FiX size={24} />
-            </button>
-          </div>
-          
-          <div className="font-size-preview" style={{ fontSize: `${currentFontSize}px` }}>
-            Anteprima testo
-          </div>
-          
-          <div className="font-size-slider-container mt-3">
-            <input
-              type="range"
-              min="10"
-              max="48"
-              step="1"
-              value={currentFontSize}
-              onChange={(e) => setCurrentFontSize(parseInt(e.target.value))}
-              className="font-size-slider w-100"
+              aria-label={`Colore ${color}`}
             />
-            <div className="font-size-range d-flex justify-content-between">
-              <span>10px</span>
-              <span>48px</span>
-            </div>
-          </div>
-          
-          <div className="font-size-presets mt-3">
-            <div className="d-flex flex-wrap justify-content-between">
-              {fontSizePresets.map(size => (
-                <button
-                  key={size}
-                  className={`preset-btn ${currentFontSize === size ? 'active' : ''}`}
-                  onClick={() => setCurrentFontSize(size)}
-                >
-                  {size}
-                </button>
-              ))}
-            </div>
-          </div>
-          
-          <div className="tool-footer mt-3 d-flex justify-content-end">
-            <button 
-              className="btn btn-primary apply-btn"
-              onClick={() => {
-                applyMobileFontSize(currentFontSize)
-                setShowMobileFontSizeTool(false)
-                document.body.style.overflow = ''
-                document.body.classList.remove('font-size-tool-open')
-              }}
-            >
-              Applica
-            </button>
-          </div>
+          ))}
         </div>
-      </>
-    )
-  }
+      </Popover.Body>
+    </Popover>
+  );
   
-  // Componente per la selezione del colore su mobile
-  const MobileColorPicker = () => {
-    console.log("🎨 Rendering color picker, visible:", showMobileColorPicker, "last action:", lastAction);
-    
-    return (
-      <>
-        <div className={`tool-overlay ${showMobileColorPicker ? 'active' : ''}`}></div>
-        <div 
-          ref={colorPickerRef}
-          className={`mobile-color-picker ${showMobileColorPicker ? 'active' : ''}`}
-        >
-          <div className="swipe-indicator"></div>
-          <div className="tool-header">
-            <h3>Colore testo</h3>
-            <button 
-              className="close-btn" 
-              onClick={() => {
-                setShowMobileColorPicker(false)
-                document.body.style.overflow = ''
-              }}
-            >
-              <FiX size={24} />
-            </button>
-          </div>
-          
-          <div className="color-picker-grid">
-            {colorOptions.map(color => (
-              <div
-                key={color}
-                className={`color-option ${selectedColor === color ? 'active' : ''}`}
-                style={{ backgroundColor: color }}
-                onClick={() => {
-                  applyMobileColor(color)
-                  setShowMobileColorPicker(false)
-                  document.body.style.overflow = ''
-                }}
-              ></div>
-            ))}
-          </div>
-        </div>
-      </>
-    )
-  }
+  // Componente per la palette colori mobile
+  // const MobileColorPicker = () => {
+  //   // ... codice del componente
+  // };
   
   // Aggiungi questo effetto per migliorare la visibilità dei modali
   useEffect(() => {
     // Quando un modale è aperto, aggiungi una classe al body
-    if (showMobileFontSizeTool || showMobileColorPicker) {
+    if (showMobileFontSizeTool || showColorPicker) {
       document.body.classList.add('modal-open');
     } else {
       document.body.classList.remove('modal-open');
@@ -1172,9 +1014,343 @@ const Editor = ({ onContentChange, initialContent }) => {
     
     // Log per debug
     console.log("Font size tool visibility:", showMobileFontSizeTool);
-    console.log("Color picker visibility:", showMobileColorPicker);
+    console.log("Color picker visibility:", showColorPicker);
     
-  }, [showMobileFontSizeTool, showMobileColorPicker]);
+  }, [showMobileFontSizeTool, showColorPicker]);
+
+  // Aggiungi questa definizione del componente prima del return finale
+  const MobileFontSizeTool = () => {
+    return (
+      <>
+        <div 
+          className={`tool-overlay ${showMobileFontSizeTool ? 'active' : ''}`}
+          style={{ zIndex: 1999 }}
+          onClick={() => {
+            setShowMobileFontSizeTool(false);
+            document.body.style.overflow = '';
+          }}
+        ></div>
+        
+        <div 
+          className={`mobile-font-size-tool ${showMobileFontSizeTool ? 'active' : ''}`}
+          style={{ zIndex: 2000 }}
+        >
+          <div className="swipe-indicator"></div>
+          <div className="tool-header">
+            <h3>Dimensione testo: {fontSize}px</h3>
+            <button 
+              className="close-btn" 
+              onClick={() => {
+                setShowMobileFontSizeTool(false);
+                document.body.style.overflow = '';
+              }}
+            >
+              <FiX size={24} />
+            </button>
+          </div>
+          
+          <div className="font-size-slider-container mt-3">
+            <div className="font-size-preview" style={{ fontSize: `${fontSize}px` }}>
+              Aa
+            </div>
+            <Form.Range
+              min="8"
+              max="72"
+              step="1"
+              value={fontSize}
+              onChange={handleFontSizeChange}
+              onInput={handleFontSizeInput}
+              className="font-size-slider"
+            />
+            <div className="font-size-range">
+              <span>8px</span>
+              <span>72px</span>
+            </div>
+          </div>
+          
+          <div className="tool-footer mt-3 d-flex justify-content-end">
+            <button 
+              className="btn btn-primary apply-btn"
+              onClick={() => {
+                applyFontSize(fontSize);
+                setShowMobileFontSizeTool(false);
+                document.body.style.overflow = '';
+              }}
+            >
+              Applica
+            </button>
+          </div>
+        </div>
+      </>
+    );
+  };
+
+  // Aggiungi un effetto per gestire meglio la selezione su mobile
+  useEffect(() => {
+    if (!editor) return;
+    
+    // Funzione per aggiornare il colore selezionato in base alla selezione corrente
+    const updateSelectedColor = () => {
+      if (editor.isActive('textStyle')) {
+        const attrs = editor.getAttributes('textStyle');
+        if (attrs.color) {
+          setSelectedColor(attrs.color);
+        }
+      }
+    };
+    
+    // Aggiungi un listener per l'evento selectionUpdate
+    editor.on('selectionUpdate', updateSelectedColor);
+    
+    return () => {
+      editor.off('selectionUpdate', updateSelectedColor);
+    };
+  }, [editor]);
+
+  // Aggiungi questo all'inizio della funzione Editor
+  useEffect(() => {
+    console.log("Editor theme:", document.documentElement.getAttribute('data-theme'));
+    
+    // Verifica se le regole CSS sono applicate correttamente
+    const styleSheets = document.styleSheets;
+    for (let i = 0; i < styleSheets.length; i++) {
+      try {
+        const rules = styleSheets[i].cssRules || styleSheets[i].rules;
+        for (let j = 0; j < rules.length; j++) {
+          if (rules[j].selectorText && rules[j].selectorText.includes('[data-theme="dark"] .ProseMirror [style*="color"]')) {
+            console.log("Found problematic CSS rule:", rules[j].cssText);
+          }
+        }
+      } catch (e) {
+        // Ignora errori CORS
+      }
+    }
+  }, []);
+
+  // Aggiungi un useEffect per rilevare se il dispositivo è mobile
+  useEffect(() => {
+    const checkMobileDevice = () => {
+      const isMobile = window.innerWidth <= 767;
+      setIsMobileDevice(isMobile);
+    };
+    
+    checkMobileDevice();
+    window.addEventListener('resize', checkMobileDevice);
+    
+    return () => {
+      window.removeEventListener('resize', checkMobileDevice);
+    };
+  }, []);
+
+  // Aggiungi questo effetto per gestire il padding dell'editor su mobile
+  useEffect(() => {
+    if (!editor || !isMobileDevice) return;
+    
+    const editorElement = editor.view.dom;
+    const toolbarHeight = document.querySelector('.mobile-toolbar-container')?.offsetHeight || 60;
+    
+    // Aggiungi padding in basso all'editor per evitare che il contenuto venga nascosto dalla toolbar
+    editorElement.style.paddingBottom = `${toolbarHeight + 20}px`;
+    
+    // Aggiorna il padding quando cambia l'orientamento del dispositivo
+    const handleResize = () => {
+      const updatedToolbarHeight = document.querySelector('.mobile-toolbar-container')?.offsetHeight || 60;
+      editorElement.style.paddingBottom = `${updatedToolbarHeight + 20}px`;
+    };
+    
+    window.addEventListener('resize', handleResize);
+    
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [editor, isMobileDevice]);
+
+  // Funzioni per applicare l'allineamento tramite classi CSS
+  const applyLeftAlign = () => {
+    if (!editor) return;
+    
+    // Rimuovi tutte le classi di allineamento
+    editor.chain().focus().removeClass('text-center').removeClass('text-right').run();
+  };
+
+  const applyCenterAlign = () => {
+    if (!editor) return;
+    
+    // Rimuovi altre classi di allineamento e aggiungi text-center
+    editor.chain().focus().removeClass('text-right').addClass('text-center').run();
+  };
+
+  const applyRightAlign = () => {
+    if (!editor) return;
+    
+    // Rimuovi altre classi di allineamento e aggiungi text-right
+    editor.chain().focus().removeClass('text-center').addClass('text-right').run();
+  };
+
+  // Aggiungi questo effetto per migliorare la gestione del focus su mobile
+  useEffect(() => {
+    if (!editor || !isMobileDevice) return;
+    
+    // Funzione per gestire il tocco sull'editor
+    const handleEditorTouch = () => {
+      // Assicurati che l'editor abbia il focus
+      if (!editor.isFocused) {
+        editor.commands.focus();
+      }
+      
+      // Nascondi la tastiera virtuale quando si tocca fuori da un campo di input
+      document.activeElement.blur();
+    };
+    
+    // Funzione per gestire il tocco sui pulsanti della toolbar
+    const handleToolbarTouch = (e) => {
+      // Previeni che il tocco sui pulsanti della toolbar tolga il focus all'editor
+      e.stopPropagation();
+    };
+    
+    // Aggiungi gli event listener
+    const editorElement = editor.view.dom;
+    editorElement.addEventListener('touchstart', handleEditorTouch);
+    
+    const toolbarElement = document.querySelector('.mobile-toolbar');
+    if (toolbarElement) {
+      toolbarElement.addEventListener('touchstart', handleToolbarTouch);
+    }
+    
+    // Cleanup
+    return () => {
+      editorElement.removeEventListener('touchstart', handleEditorTouch);
+      if (toolbarElement) {
+        toolbarElement.removeEventListener('touchstart', handleToolbarTouch);
+      }
+    };
+  }, [editor, isMobileDevice]);
+
+  // Aggiungi questo effetto per gestire lo scrolling automatico
+  useEffect(() => {
+    if (!editor || !isMobileDevice) return;
+    
+    // Funzione per gestire lo scrolling automatico
+    const handleAutoScroll = () => {
+      const { selection } = editor.state;
+      if (!selection) return;
+      
+      // Ottieni la posizione del cursore
+      const { from } = selection;
+      const pos = editor.view.coordsAtPos(from);
+      
+      // Ottieni l'altezza della toolbar
+      const toolbarHeight = document.querySelector('.mobile-toolbar-container')?.offsetHeight || 60;
+      
+      // Se il cursore è vicino alla toolbar, scorri verso l'alto
+      const viewportHeight = window.innerHeight;
+      const bottomThreshold = viewportHeight - toolbarHeight - 50;
+      
+      if (pos.bottom > bottomThreshold) {
+        // Calcola quanto scorrere
+        const scrollAmount = pos.bottom - bottomThreshold + 20;
+        
+        // Scorri dolcemente
+        window.scrollBy({
+          top: scrollAmount,
+          behavior: 'smooth'
+        });
+      }
+    };
+    
+    // Aggiungi l'event listener per l'input
+    editor.on('update', handleAutoScroll);
+    
+    // Cleanup
+    return () => {
+      editor.off('update', handleAutoScroll);
+    };
+  }, [editor, isMobileDevice]);
+
+  // Aggiungi la funzione per inserire un blocco di disegno
+  const insertDrawing = () => {
+    if (!editor) return;
+    
+    console.log('Inserimento blocco di disegno'); // Debug
+    
+    editor.chain()
+      .focus()
+      .insertDrawing()
+      .run();
+    
+    // Scorri automaticamente al blocco di disegno appena inserito
+    setTimeout(() => {
+      const drawingElements = document.querySelectorAll('.drawing-component');
+      if (drawingElements.length > 0) {
+        const lastDrawing = drawingElements[drawingElements.length - 1];
+        lastDrawing.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        
+        // Attiva automaticamente la modalità di disegno
+        const container = lastDrawing.querySelector('.drawing-container');
+        if (container) {
+          container.click();
+        }
+      }
+    }, 100);
+  };
+
+  // Aggiungi questa funzione per inserire documenti tramite pulsante
+  const insertDocument = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.multiple = true;
+    input.onchange = (e) => {
+      if (e.target.files && e.target.files.length > 0) {
+        const files = Array.from(e.target.files);
+        
+        setIsLoading(true);
+        let processedFiles = 0;
+        
+        files.forEach(file => {
+          const reader = new FileReader();
+          
+          reader.onload = (event) => {
+            const fileContent = event.target.result;
+            
+            if (editor) {
+              editor.commands.insertDocument({
+                fileName: file.name,
+                fileType: file.type || 'application/octet-stream',
+                fileSize: file.size,
+                fileContent: fileContent,
+                id: 'doc-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9)
+              });
+            }
+            
+            processedFiles++;
+            if (processedFiles === files.length) {
+              setIsLoading(false);
+            }
+          };
+          
+          reader.onerror = () => {
+            console.error("Errore nella lettura del file:", file.name);
+            processedFiles++;
+            if (processedFiles === files.length) {
+              setIsLoading(false);
+            }
+          };
+          
+          if (file.type.includes('image')) {
+            reader.readAsDataURL(file);
+          } else if (file.type.includes('text') || file.type.includes('json') || file.type.includes('xml') || 
+                    file.type.includes('javascript') || file.type.includes('html') || file.type.includes('css')) {
+            reader.readAsText(file);
+          } else if (file.type.includes('pdf')) {
+            reader.readAsDataURL(file);
+          } else {
+            reader.readAsDataURL(file);
+          }
+        });
+      }
+    };
+    input.click();
+  };
 
   return (
     <div className={`editor-container d-flex flex-column h-100 ${isMobileDevice ? 'mobile-mode' : ''} ${isKeyboardVisible ? 'keyboard-visible' : ''}`}>
@@ -1188,6 +1364,8 @@ const Editor = ({ onContentChange, initialContent }) => {
                   variant={editor.isActive('bold') ? 'primary' : 'light'}
                   onClick={() => editor.chain().focus().toggleBold().run()}
                   className="toolbar-btn"
+                  active={editor.isActive('bold')}
+                  aria-label="Grassetto"
                 >
                   <FiBold />
                 </Button>
@@ -1197,6 +1375,8 @@ const Editor = ({ onContentChange, initialContent }) => {
                   variant={editor.isActive('italic') ? 'primary' : 'light'}
                   onClick={() => editor.chain().focus().toggleItalic().run()}
                   className="toolbar-btn"
+                  active={editor.isActive('italic')}
+                  aria-label="Corsivo"
                 >
                   <FiItalic />
                 </Button>
@@ -1206,6 +1386,8 @@ const Editor = ({ onContentChange, initialContent }) => {
                   variant={editor.isActive('code') ? 'primary' : 'light'}
                   onClick={() => editor.chain().focus().toggleCode().run()}
                   className="toolbar-btn"
+                  active={editor.isActive('code')}
+                  aria-label="Codice inline"
                 >
                   <FiCode />
                 </Button>
@@ -1219,6 +1401,8 @@ const Editor = ({ onContentChange, initialContent }) => {
                 variant={editor.isActive('heading', { level: 1 }) ? 'primary' : 'light'}
                 onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
                   className="toolbar-btn"
+                active={editor.isActive('heading', { level: 1 })}
+                aria-label="Titolo 1"
               >
                 <FiType /> H1
               </Button>
@@ -1228,6 +1412,8 @@ const Editor = ({ onContentChange, initialContent }) => {
                 variant={editor.isActive('heading', { level: 2 }) ? 'primary' : 'light'}
                 onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
                   className="toolbar-btn"
+                active={editor.isActive('heading', { level: 2 })}
+                aria-label="Titolo 2"
               >
                 <FiType className="me-1" /> H2
               </Button>
@@ -1237,6 +1423,8 @@ const Editor = ({ onContentChange, initialContent }) => {
                 variant={editor.isActive('heading', { level: 3 }) ? 'primary' : 'light'}
                 onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
                   className="toolbar-btn"
+                active={editor.isActive('heading', { level: 3 })}
+                aria-label="Titolo 3"
               >
                 <FiType className="me-1" /> H3
               </Button>
@@ -1250,6 +1438,8 @@ const Editor = ({ onContentChange, initialContent }) => {
                 variant={editor.isActive('bulletList') ? 'primary' : 'light'}
                 onClick={() => editor.chain().focus().toggleBulletList().run()}
                   className="toolbar-btn"
+                active={editor.isActive('bulletList')}
+                aria-label="Elenco puntato"
               >
                 <FiList />
               </Button>
@@ -1259,8 +1449,10 @@ const Editor = ({ onContentChange, initialContent }) => {
                 variant={editor.isActive('orderedList') ? 'primary' : 'light'}
                 onClick={() => editor.chain().focus().toggleOrderedList().run()}
                   className="toolbar-btn"
+                active={editor.isActive('orderedList')}
+                aria-label="Elenco numerato"
               >
-                <FiList className="me-1" /> 123
+                <FiHash />
               </Button>
               </OverlayTrigger>
             </ButtonGroup>
@@ -1313,53 +1505,85 @@ const Editor = ({ onContentChange, initialContent }) => {
                   variant="light"
                   className="toolbar-btn font-size-btn"
                   onClick={handleFontSizeButtonClick}
+                  active={showFontSizeSlider}
+                  aria-label="Dimensione testo"
                 >
                   <MdFormatSize />
                   <span className="font-size-value">{fontSize}</span>
                 </Button>
               </OverlayTrigger>
               
-              {/* Pulsante per il colore del testo - versione migliorata */}
-              <OverlayTrigger placement="top" overlay={(props) => renderTooltip(props, 'Colore testo')}>
-                <Dropdown show={showColorPicker} onToggle={() => setShowColorPicker(!showColorPicker)}>
-                  <Dropdown.Toggle variant="light" className="toolbar-btn color-picker-btn">
-                    <IoColorPaletteOutline className="icon-main" />
-                    <MdArrowDropDown className="icon-dropdown" />
-                  </Dropdown.Toggle>
-                  <Dropdown.Menu className="color-picker-menu">
-                    <div className="color-picker-header">Colore testo</div>
-                    <div className="color-picker-grid">
-                      {[
-                        '#000000', '#434343', '#666666', '#999999', '#b7b7b7', '#cccccc', '#d9d9d9', '#efefef', '#f3f3f3', '#ffffff',
-                        '#980000', '#ff0000', '#ff9900', '#ffff00', '#00ff00', '#00ffff', '#4a86e8', '#0000ff', '#9900ff', '#ff00ff',
-                        '#e6b8af', '#f4cccc', '#fce5cd', '#fff2cc', '#d9ead3', '#d0e0e3', '#c9daf8', '#cfe2f3', '#d9d2e9', '#ead1dc'
-                      ].map(color => (
-                        <div 
-                          key={color} 
-                          className="color-option" 
-                          style={{ backgroundColor: color }} 
-                          onClick={() => applyTextColor(color)}
-                          title={color}
-                        >
-                          {/* Indicatore di selezione per il colore attivo */}
-                          {editor && editor.isActive('textStyle', { color }) && (
-                            <div className="color-selected-indicator" />
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </Dropdown.Menu>
-                </Dropdown>
-              </OverlayTrigger>
+              {/* Pulsante per il colore del testo */}
+              {/* Rimuovi questo blocco di codice */}
+              {/* <OverlayTrigger
+                trigger="click"
+                placement="bottom"
+                show={showColorPicker && !isMobileDevice}
+                onToggle={() => !isMobileDevice && setShowColorPicker(!showColorPicker)}
+                overlay={ColorPickerPopover}
+              >
+                <Button
+                  variant="light"
+                  className="toolbar-btn color-btn"
+                  onClick={() => !isMobileDevice && handleColorPickerToggle()}
+                  active={showColorPicker}
+                  aria-label="Colore testo"
+                >
+                  <IoColorPaletteOutline />
+                  <span 
+                    className="color-indicator" 
+                    style={{ 
+                      backgroundColor: selectedColor,
+                      display: 'inline-block',
+                      width: '12px',
+                      height: '12px',
+                      borderRadius: '50%',
+                      marginLeft: '4px'
+                    }}
+                  ></span>
+                </Button>
+              </OverlayTrigger> */}
               
               <OverlayTrigger placement="top" overlay={(props) => renderTooltip(props, 'Inserisci link')}>
-              <Button
-                variant={editor.isActive('link') ? 'primary' : 'light'}
+                <Button
+                  variant={editor.isActive('link') ? 'primary' : 'light'}
                   onClick={handleSetLink}
                   className="toolbar-btn"
+                  active={editor.isActive('link')}
+                  aria-label="Inserisci link"
+                >
+                  <FiLink />
+                </Button>
+              </OverlayTrigger>
+            </ButtonGroup>
+            
+            {/* Aggiungi un nuovo gruppo per il disegno */}
+            <ButtonGroup className="flex-nowrap toolbar-group">
+              <OverlayTrigger placement="top" overlay={(props) => renderTooltip(props, 'Disegno a mano libera')}>
+                <Button
+                  variant="light"
+                  onClick={insertDrawing}
+                  className="toolbar-btn drawing-btn"
+                  aria-label="Disegno a mano libera"
+                >
+                  <FiEdit3 />
+                </Button>
+              </OverlayTrigger>
+            </ButtonGroup>
+            
+            {/* Aggiungi il pulsante per inserire documenti */}
+            <ButtonGroup className="flex-nowrap toolbar-group">
+              <OverlayTrigger
+                placement="bottom"
+                overlay={renderTooltip({}, "Inserisci documento")}
               >
-                <FiLink />
-              </Button>
+                <Button
+                  variant="light"
+                  onClick={insertDocument}
+                  className="toolbar-btn"
+                >
+                  <FiFile />
+                </Button>
               </OverlayTrigger>
             </ButtonGroup>
           </ButtonToolbar>
@@ -1369,14 +1593,6 @@ const Editor = ({ onContentChange, initialContent }) => {
       <div className="editor-content-container flex-grow-1 overflow-hidden position-relative">
         {isMobileDevice && <MobileToolbar />}
         <EditorContent editor={editor} className="editor-content h-100" />
-        <FocusButton />
-        
-        {/* Aggiungi un pulsante flottante per accedere alle opzioni di formattazione su mobile */}
-        {isMobileDevice && (
-          <div className="mobile-format-button" onClick={toggleMobileOptions}>
-            <FiType />
-          </div>
-        )}
         
         {/* Opzioni di formattazione mobile */}
         {isMobileDevice && showMobileOptions && (
@@ -1452,6 +1668,21 @@ const Editor = ({ onContentChange, initialContent }) => {
           </Button>
         </Modal.Footer>
       </Modal>
+      
+      {/* Aggiungi i modali per mobile */}
+      {isMobileDevice && (
+        <>
+          <MobileFontSizeTool />
+        </>
+      )}
+      
+      {/* Indicatore di caricamento */}
+      {isLoading && (
+        <div className="loading-overlay">
+          <div className="loading-spinner"></div>
+          <div className="loading-text">Caricamento documento...</div>
+        </div>
+      )}
     </div>
   )
 }

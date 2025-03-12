@@ -1,0 +1,270 @@
+.document-component {
+  margin: 1.5rem 0;
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.document-component.dragging {
+  opacity: 0.6;
+  outline: 2px dashed var(--accent-color);
+  outline-offset: 4px;
+}
+
+.document-container {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.document-container:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.document-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  background-color: var(--accent-color);
+  color: white;
+  border-radius: 8px;
+  margin-right: 12px;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.document-preview-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.document-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.document-name {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 4px;
+}
+
+.document-meta {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.document-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: 12px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.document-container:hover .document-actions {
+  opacity: 1;
+}
+
+.document-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.document-action-btn:hover {
+  background-color: var(--accent-color);
+  color: white;
+  transform: scale(1.1);
+}
+
+.document-action-btn.delete-btn:hover {
+  background-color: #ff5252;
+}
+
+.drag-handle {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  color: var(--text-secondary);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.document-container:hover .drag-handle {
+  opacity: 0.7;
+}
+
+.document-modal-image {
+  max-width: 100%;
+  max-height: 70vh;
+  display: block;
+  margin: 0 auto;
+}
+
+.document-text-content {
+  white-space: pre-wrap;
+  overflow-x: auto;
+  background-color: var(--bg-secondary);
+  padding: 16px;
+  border-radius: 8px;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.document-pdf-viewer {
+  border: none;
+  width: 100%;
+  height: 70vh;
+}
+
+[data-theme="dark"] .document-container {
+  background-color: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .document-action-btn {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+[data-theme="dark"] .document-text-content {
+  background-color: rgba(0, 0, 0, 0.3);
+}
+
+@media (max-width: 767px) {
+  .document-container {
+    padding: 10px 12px;
+  }
+  
+  .document-icon {
+    width: 36px;
+    height: 36px;
+  }
+  
+  .document-actions {
+    opacity: 1;
+  }
+  
+  .document-action-btn {
+    width: 28px;
+    height: 28px;
+  }
+  
+  .drag-handle {
+    display: none;
+  }
+}
+
+/* Migliora lo stile del modale */
+.document-modal .modal-content {
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+.document-modal .modal-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--bg-secondary);
+}
+
+.document-modal .modal-body {
+  padding: 0;
+  background-color: var(--bg-primary);
+  max-height: 80vh;
+  overflow: auto;
+}
+
+.document-modal .modal-footer {
+  padding: 12px 20px;
+  border-top: 1px solid var(--border-color);
+  background-color: var(--bg-secondary);
+}
+
+/* Contenitori specifici per diversi tipi di file */
+.document-image-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  background-color: rgba(0, 0, 0, 0.03);
+  min-height: 300px;
+}
+
+.document-text-container {
+  padding: 0;
+}
+
+.document-text-content {
+  margin: 0;
+  padding: 20px;
+  white-space: pre-wrap;
+  overflow-x: auto;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  line-height: 1.5;
+  background-color: var(--bg-secondary);
+  border-radius: 0;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.document-pdf-container {
+  height: 70vh;
+  overflow: hidden;
+}
+
+.document-generic-container {
+  padding: 30px;
+  text-align: center;
+}
+
+.document-download-link {
+  display: inline-block;
+  margin-top: 15px;
+  padding: 10px 20px;
+  background-color: var(--accent-color);
+  color: white;
+  border-radius: 6px;
+  text-decoration: none;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.document-download-link:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Tema scuro */
+[data-theme="dark"] .document-image-container {
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+[data-theme="dark"] .document-modal .modal-content {
+  background-color: var(--bg-secondary);
+}
+
+[data-theme="dark"] .document-modal .modal-body {
+  background-color: var(--bg-primary);
+} 
