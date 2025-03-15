@@ -267,4 +267,722 @@
 
 [data-theme="dark"] .document-modal .modal-body {
   background-color: var(--bg-primary);
+}
+
+/* Stili per la visualizzazione degli errori */
+.document-error-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 30px;
+  text-align: center;
+  background-color: rgba(255, 0, 0, 0.05);
+  border-radius: 8px;
+}
+
+.error-icon {
+  color: #d63031;
+  margin-bottom: 16px;
+}
+
+.error-message {
+  color: #d63031;
+  font-weight: 500;
+  margin-bottom: 16px;
+}
+
+.error-image {
+  width: 100px;
+  height: 100px;
+  object-fit: contain;
+}
+
+/* Stili per il pulsante di download */
+.document-download-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 20px;
+  background-color: var(--accent-color);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 16px;
+}
+
+.document-download-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Stili per l'icona del tipo di file */
+.file-type-icon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  margin-bottom: 16px;
+}
+
+.file-extension {
+  position: absolute;
+  bottom: -5px;
+  font-size: 10px;
+  font-weight: bold;
+  background-color: var(--accent-color);
+  color: white;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+/* Miglioramenti per la visualizzazione dei PDF */
+.document-pdf-container {
+  height: 100%;
+  min-height: 500px;
+  overflow: hidden;
+  border-radius: 0;
+  border: none;
+  position: relative;
+  background-color: #f5f5f5;
+}
+
+.document-pdf-viewer {
+  border: none;
+  width: 100%;
+  height: 100%;
+  min-height: 500px;
+}
+
+.pdf-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 300px;
+  font-size: 16px;
+  color: var(--text-secondary);
+}
+
+.pdf-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  min-height: 300px;
+  font-size: 16px;
+  color: #d63031;
+  text-align: center;
+  padding: 20px;
+}
+
+.pdf-download-link {
+  display: inline-block;
+  margin-top: 15px;
+  padding: 10px 20px;
+  background-color: var(--accent-color);
+  color: white;
+  border-radius: 6px;
+  text-decoration: none;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.pdf-download-link:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.pdf-navigation {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  background-color: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+}
+
+.pdf-nav-btn {
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 5px 10px;
+  margin: 0 5px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.pdf-nav-btn:hover:not(:disabled) {
+  background-color: var(--accent-color);
+  color: white;
+}
+
+.pdf-nav-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pdf-page-indicator {
+  margin: 0 10px;
+  font-size: 0.9rem;
+}
+
+.pdf-page-input {
+  width: 40px;
+  text-align: center;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 2px 5px;
+  margin: 0 5px;
+}
+
+/* Miglioramenti per la visualizzazione delle immagini */
+.document-image-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  background-color: rgba(0, 0, 0, 0.03);
+  min-height: 300px;
+  transition: transform 0.3s ease;
+  overflow: auto;
+  height: 100%;
+}
+
+.document-modal-image {
+  max-width: 100%;
+  max-height: 100%;
+  display: block;
+  margin: 0 auto;
+  border-radius: 4px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  transition: transform 0.3s ease;
+}
+
+/* Miglioramenti per la visualizzazione del testo */
+.document-text-container {
+  padding: 0;
+  height: 100%;
+  overflow: auto;
+}
+
+.document-text-content {
+  margin: 0;
+  padding: 20px;
+  white-space: pre-wrap;
+  overflow-x: auto;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  line-height: 1.5;
+  background-color: var(--bg-secondary);
+  border-radius: 0;
+  min-height: 100%;
+}
+
+/* Icone specifiche per i tipi di file */
+.file-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-weight: bold;
+  font-size: 12px;
+}
+
+.pdf-icon {
+  background-color: #e74c3c;
+}
+
+.doc-icon {
+  background-color: #3498db;
+}
+
+.xls-icon {
+  background-color: #2ecc71;
+}
+
+.ppt-icon {
+  background-color: #e67e22;
+}
+
+.txt-icon {
+  background-color: #95a5a6;
+}
+
+/* Responsive per dispositivi mobili */
+@media (max-width: 767px) {
+  .document-modal .modal-dialog {
+    max-width: 100%;
+    margin: 0;
+    height: 100%;
+  }
+  
+  .document-modal .modal-content {
+    border-radius: 0;
+    height: 100vh;
+  }
+  
+  .document-modal .modal-header {
+    padding: 10px 15px;
+    flex-wrap: wrap;
+  }
+  
+  .document-modal .modal-title {
+    font-size: 1rem;
+    max-width: 100%;
+    margin-bottom: 8px;
+    flex: 1 0 100%;
+  }
+  
+  .document-controls {
+    width: 100%;
+    justify-content: space-between;
+    margin-top: 8px;
+  }
+  
+  .document-control-btn {
+    padding: 5px 8px;
+    font-size: 0.8rem;
+  }
+  
+  .document-modal .modal-body {
+    max-height: calc(100vh - 180px); /* Adjusted for mobile header */
+  }
+  
+  .document-pdf-container {
+    min-height: 400px;
+  }
+  
+  .pdf-navigation {
+    padding: 8px;
+  }
+  
+  .pdf-page-indicator {
+    font-size: 0.8rem;
+  }
+  
+  .pdf-page-input {
+    width: 35px;
+  }
+  
+  .document-modal .modal-footer {
+    padding: 10px 15px;
+  }
+  
+  .document-modal .modal-footer .btn {
+    padding: 6px 12px;
+    font-size: 0.9rem;
+  }
+  
+  /* Miglioramenti per il touch su mobile */
+  .document-image-container {
+    touch-action: pan-x pan-y pinch-zoom;
+  }
+  
+  .document-text-content {
+    padding: 15px;
+    font-size: 16px; /* Dimensione più grande per mobile */
+  }
+}
+
+/* Tema scuro */
+[data-theme="dark"] .document-modal .modal-content {
+  background-color: var(--bg-secondary);
+}
+
+[data-theme="dark"] .document-modal .modal-body {
+  background-color: var(--bg-primary);
+}
+
+[data-theme="dark"] .document-image-container {
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+[data-theme="dark"] .document-control-btn {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+[data-theme="dark"] .document-control-btn:hover {
+  background-color: var(--accent-color);
+}
+
+[data-theme="dark"] .pdf-navigation {
+  background-color: rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] .pdf-nav-btn {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+[data-theme="dark"] .pdf-page-input {
+  background-color: rgba(0, 0, 0, 0.3);
+  color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Animazioni */
+@keyframes modalFadeIn {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.document-modal .modal-content {
+  animation: modalFadeIn 0.3s ease-out forwards;
+}
+
+/* Supporto per il pinch-to-zoom su dispositivi touch */
+.document-image-container {
+  touch-action: manipulation;
+}
+
+/* Stile per il pulsante di download */
+.document-download-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 20px;
+  background-color: var(--accent-color);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 16px;
+}
+
+.document-download-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+/* Stili per la visualizzazione degli errori */
+.document-error-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 30px;
+  text-align: center;
+  background-color: rgba(255, 0, 0, 0.05);
+  border-radius: 8px;
+}
+
+.error-icon {
+  color: #d63031;
+  margin-bottom: 16px;
+}
+
+.error-message {
+  color: #d63031;
+  font-weight: 500;
+  margin-bottom: 16px;
+}
+
+.error-image {
+  width: 100px;
+  height: 100px;
+  object-fit: contain;
+}
+
+/* Miglioramenti per dispositivi molto piccoli */
+@media (max-width: 375px) {
+  .document-controls {
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+  
+  .document-control-btn {
+    padding: 4px 6px;
+    font-size: 0.75rem;
+    flex: 1 0 calc(50% - 5px);
+  }
+  
+  .pdf-navigation {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  
+  .pdf-page-indicator {
+    width: 100%;
+    text-align: center;
+    margin: 5px 0;
+  }
+  
+  .document-modal .modal-footer {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .document-modal .modal-footer .btn {
+    width: 100%;
+  }
+}
+
+/* Miglioramenti per la visualizzazione di documenti generici */
+.document-generic-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 30px;
+  text-align: center;
+  height: 100%;
+  min-height: 300px;
+}
+
+.file-type-icon {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  margin-bottom: 16px;
+}
+
+.file-extension {
+  position: absolute;
+  bottom: -5px;
+  font-size: 10px;
+  font-weight: bold;
+  background-color: var(--accent-color);
+  color: white;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+/* Miglioramenti per l'accessibilità */
+.document-control-btn:focus,
+.pdf-nav-btn:focus,
+.pdf-page-input:focus,
+.document-download-button:focus {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 2px;
+}
+
+/* Indicatore di caricamento per documenti pesanti */
+.document-loading {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(var(--bg-primary-rgb), 0.7);
+  z-index: 10;
+}
+
+.document-loading-spinner {
+  width: 50px;
+  height: 50px;
+  border: 5px solid rgba(var(--accent-color-rgb), 0.3);
+  border-radius: 50%;
+  border-top-color: var(--accent-color);
+  animation: spin 1s ease-in-out infinite;
+}
+
+.document-loading-text {
+  margin-top: 16px;
+  font-size: 14px;
+  color: var(--text-primary);
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Miglioramenti per la gestione del touch */
+.document-viewer-container {
+  -webkit-overflow-scrolling: touch; /* Migliora lo scrolling su iOS */
+}
+
+/* Miglioramenti per la visualizzazione di immagini con zoom */
+.document-image-container.zoomed {
+  cursor: grab;
+}
+
+.document-image-container.zoomed:active {
+  cursor: grabbing;
+}
+
+/* Indicatore di zoom */
+.zoom-level-indicator {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  background-color: rgba(0, 0, 0, 0.5);
+  color: white;
+  padding: 5px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  opacity: 0.7;
+  transition: opacity 0.3s ease;
+}
+
+.zoom-level-indicator.fade {
+  opacity: 0;
+}
+
+/* Miglioramenti per la rotazione delle immagini */
+.document-image-container.rotate-90 {
+  transform: rotate(90deg);
+}
+
+.document-image-container.rotate-180 {
+  transform: rotate(180deg);
+}
+
+.document-image-container.rotate-270 {
+  transform: rotate(270deg);
+}
+
+/* Miglioramenti per la visualizzazione di documenti di testo con sintassi evidenziata */
+.document-text-content.syntax-highlighted {
+  font-family: 'Fira Code', 'Courier New', monospace;
+}
+
+.document-text-content .keyword {
+  color: #c678dd;
+}
+
+.document-text-content .string {
+  color: #98c379;
+}
+
+.document-text-content .number {
+  color: #d19a66;
+}
+
+.document-text-content .comment {
+  color: #5c6370;
+  font-style: italic;
+}
+
+/* Tema scuro per la sintassi evidenziata */
+[data-theme="dark"] .document-text-content .keyword {
+  color: #c678dd;
+}
+
+[data-theme="dark"] .document-text-content .string {
+  color: #98c379;
+}
+
+[data-theme="dark"] .document-text-content .number {
+  color: #d19a66;
+}
+
+[data-theme="dark"] .document-text-content .comment {
+  color: #7f848e;
+}
+
+/* Miglioramenti per la visualizzazione di documenti di testo con numeri di riga */
+.document-text-content.with-line-numbers {
+  padding-left: 50px;
+  position: relative;
+}
+
+.document-text-content .line-numbers {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 40px;
+  background-color: rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  padding: 20px 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  user-select: none;
+}
+
+[data-theme="dark"] .document-text-content .line-numbers {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+/* Miglioramenti per la visualizzazione di documenti di testo con ricerca */
+.document-text-search {
+  display: flex;
+  align-items: center;
+  padding: 10px;
+  background-color: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.document-text-search input {
+  flex: 1;
+  padding: 5px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.document-text-search button {
+  margin-left: 5px;
+  padding: 5px 10px;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.document-text-search button:hover {
+  background-color: var(--accent-color);
+  color: white;
+}
+
+.document-text-content .highlight {
+  background-color: rgba(var(--accent-color-rgb), 0.3);
+  border-radius: 2px;
+}
+
+/* Miglioramenti per la visualizzazione di documenti di testo con wrap */
+.document-text-content.wrap {
+  white-space: pre-wrap;
+}
+
+.document-text-content.no-wrap {
+  white-space: pre;
+}
+
+/* Miglioramenti per la visualizzazione di documenti di testo con tema */
+.document-text-content.light-theme {
+  background-color: #ffffff;
+  color: #333333;
+}
+
+.document-text-content.dark-theme {
+  background-color: #1e1e1e;
+  color: #d4d4d4;
+}
+
+/* Miglioramenti per la visualizzazione di documenti di testo con dimensione del testo */
+.document-text-content.text-sm {
+  font-size: 12px;
+}
+
+.document-text-content.text-md {
+  font-size: 14px;
+}
+
+.document-text-content.text-lg {
+  font-size: 16px;
+}
+
+.document-text-content.text-xl {
+  font-size: 18px;
 } 

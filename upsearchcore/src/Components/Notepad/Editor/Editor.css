@@ -1348,8 +1348,8 @@
 }
 
 .mobile-font-size-tool.active {
-  transform: translateY(0);
-}
+    transform: translateY(0);
+  }
 .tool-overlay {
   position: fixed;
   top: 0;
@@ -1365,7 +1365,7 @@
 }
 
 .tool-overlay.active {
-  opacity: 1;
+    opacity: 1;
   visibility: visible;
   /* Aggiungi backdropTransitionOutTiming per prevenire flickering */
   backdrop-transition-out-timing: 0;
@@ -1721,7 +1721,7 @@
   /* Assicurarsi che la toolbar mobile sia sempre visibile e non sovrapposta */
 .mobile-toolbar-container {
   position: fixed;
-    bottom: 0;
+  bottom: 0;
   left: 0;
   right: 0;
     z-index: 100;
@@ -2095,19 +2095,18 @@
 }
 
 .ProseMirror.drag-over::after {
-  content: "Rilascia per aggiungere il documento";
+  content: "Rilascia i file qui per caricarli";
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background-color: #6c5ce7;
+  background-color: var(--accent-color);
   color: white;
   padding: 10px 20px;
-  border-radius: 8px;
-  font-weight: 500;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-  z-index: 100;
+  border-radius: 5px;
+  font-size: 16px;
   pointer-events: none;
+  white-space: nowrap;
 }
 
 /* Animazione per il documento quando viene inserito */
@@ -2127,28 +2126,28 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: rgba(255, 255, 255, 0.8);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   z-index: 9999;
+  backdrop-filter: blur(3px);
 }
 
 .loading-spinner {
   width: 50px;
   height: 50px;
-  border: 5px solid rgba(255, 255, 255, 0.3);
+  border: 5px solid rgba(0, 0, 0, 0.1);
   border-radius: 50%;
-  border-top-color: #6c5ce7;
-  animation: spin 1s ease-in-out infinite;
+  border-top-color: var(--accent-color);
+  animation: spin 1s linear infinite;
 }
 
 .loading-text {
-  margin-top: 16px;
-  color: white;
+  margin-top: 15px;
   font-size: 16px;
-  font-weight: 500;
+  color: var(--text-primary);
 }
 
 @keyframes spin {
@@ -2159,4 +2158,18 @@
 [data-theme="dark"] .ProseMirror.drag-over {
   background-color: rgba(108, 92, 231, 0.1);
   border-color: #6c5ce7;
+}
+
+/* Stili per gestire più documenti e disegni nella stessa nota */
+.ProseMirror .document-component + .document-component,
+.ProseMirror .drawing-component + .drawing-component {
+  margin-top: 20px;
+}
+
+.ProseMirror .document-component,
+.ProseMirror .drawing-component {
+  position: relative;
+  animation: document-appear 0.3s ease-in-out;
+  margin: 15px 0;
+  clear: both;
 }

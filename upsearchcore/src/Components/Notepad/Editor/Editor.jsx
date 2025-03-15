@@ -849,11 +849,10 @@ const Editor = ({ onContentChange, initialContent }) => {
             <Button
               variant="link"
               className="mobile-toolbar-btn drawing-btn"
-              onClick={() => handleToolbarButtonTouch(insertDrawing)}
+              onClick={() => insertDrawing()}
               aria-label="Disegno a mano libera"
             >
               <FiEdit3 />
-              <span className="btn-text">Disegno</span>
             </Button>
             
             {/* Aggiungi il pulsante per inserire documenti */}
@@ -1269,87 +1268,99 @@ const Editor = ({ onContentChange, initialContent }) => {
 
   // Aggiungi la funzione per inserire un blocco di disegno
   const insertDrawing = () => {
-    if (!editor) return;
-    
-    console.log('Inserimento blocco di disegno'); // Debug
-    
-    editor.chain()
-      .focus()
-      .insertDrawing()
-      .run();
-    
-    // Scorri automaticamente al blocco di disegno appena inserito
-    setTimeout(() => {
-      const drawingElements = document.querySelectorAll('.drawing-component');
-      if (drawingElements.length > 0) {
-        const lastDrawing = drawingElements[drawingElements.length - 1];
-        lastDrawing.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        
-        // Attiva automaticamente la modalità di disegno
-        const container = lastDrawing.querySelector('.drawing-container');
-        if (container) {
-          container.click();
-        }
-      }
-    }, 100);
+    editor.chain().focus().insertDrawing({
+      width: '100%',
+      height: '300px',
+      strokes: [],
+      id: 'drawing-' + Date.now() + '-' + Math.floor(Math.random() * 1000)
+    }).run();
   };
 
-  // Aggiungi questa funzione per inserire documenti tramite pulsante
+  // Migliora la funzione insertDocument per gestire correttamente i PDF
   const insertDocument = () => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.multiple = true;
+    input.multiple = true; // Consente la selezione di più file
     input.onchange = (e) => {
-      if (e.target.files && e.target.files.length > 0) {
-        const files = Array.from(e.target.files);
-        
-        setIsLoading(true);
-        let processedFiles = 0;
-        
-        files.forEach(file => {
-          const reader = new FileReader();
-          
-          reader.onload = (event) => {
-            const fileContent = event.target.result;
-            
-            if (editor) {
-              editor.commands.insertDocument({
-                fileName: file.name,
-                fileType: file.type || 'application/octet-stream',
-                fileSize: file.size,
-                fileContent: fileContent,
-                id: 'doc-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9)
-              });
-            }
-            
-            processedFiles++;
-            if (processedFiles === files.length) {
-              setIsLoading(false);
-            }
-          };
-          
-          reader.onerror = () => {
-            console.error("Errore nella lettura del file:", file.name);
-            processedFiles++;
-            if (processedFiles === files.length) {
-              setIsLoading(false);
-            }
-          };
-          
-          if (file.type.includes('image')) {
-            reader.readAsDataURL(file);
-          } else if (file.type.includes('text') || file.type.includes('json') || file.type.includes('xml') || 
-                    file.type.includes('javascript') || file.type.includes('html') || file.type.includes('css')) {
-            reader.readAsText(file);
-          } else if (file.type.includes('pdf')) {
-            reader.readAsDataURL(file);
-          } else {
-            reader.readAsDataURL(file);
-          }
-        });
-      }
+      setIsLoading(true);
+      
+      // Gestisce più file
+      const files = Array.from(e.target.files);
+      
+      // Processa ogni file in sequenza
+      const processFiles = async () => {
+        for (const file of files) {
+          await processAndInsertFile(file);
+        }
+        setIsLoading(false);
+      };
+      
+      processFiles();
     };
     input.click();
+  };
+
+  // Funzione per processare e inserire un singolo file
+  const processAndInsertFile = (file) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      const fileName = file.name;
+      const fileType = file.type;
+      const fileSize = file.size;
+      
+      if (fileType.includes('image')) {
+        reader.readAsDataURL(file);
+      } else if (fileType.includes('pdf')) {
+        reader.readAsDataURL(file);
+      } else {
+        reader.readAsText(file);
+      }
+      
+      reader.onload = () => {
+        const fileContent = reader.result;
+        
+        editor.chain().focus().insertDocument({
+          fileName,
+          fileType,
+          fileSize,
+          fileContent,
+          id: 'doc-' + Date.now() + '-' + Math.floor(Math.random() * 1000)
+        }).run();
+        
+        resolve();
+      };
+      
+      reader.onerror = () => {
+        console.error('Errore nella lettura del file');
+        resolve();
+      };
+    });
+  };
+
+  // Migliora la gestione del drag and drop
+  const handleEditorDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Rimuovi la classe drag-over
+    if (editorRef.current) {
+      editorRef.current.classList.remove('drag-over');
+    }
+    
+    setIsLoading(true);
+    
+    // Gestisci più file
+    const files = Array.from(e.dataTransfer.files);
+    
+    // Processa ogni file in sequenza
+    const processFiles = async () => {
+      for (const file of files) {
+        await processAndInsertFile(file);
+      }
+      setIsLoading(false);
+    };
+    
+    processFiles();
   };
 
   return (
