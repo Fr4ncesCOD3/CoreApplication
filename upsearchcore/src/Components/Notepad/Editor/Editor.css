@@ -21,10 +21,11 @@
   background-color: transparent;
   padding-top: 16px;
   position: relative;
+  height: calc(100% - 56px); /* Altezza totale meno altezza toolbar */
 }
 
 .editor-content {
-  padding: 1rem;
+  padding: 20px;
   height: 100%;
   overflow-y: auto;
   background-color: transparent;
@@ -35,32 +36,36 @@
 
 /* Barra degli strumenti */
 .editor-toolbar {
-  padding: 12px 20px;
   display: flex;
-  align-items: center;
-  gap: 8px;
+  overflow-x: auto;
+    white-space: nowrap;
+  padding: 8px;
+  background-color: var(--toolbar-bg);
   border-bottom: 1px solid var(--border-color);
-  background-color: var(--bg-secondary);
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  margin-top: 1px;
+  scrollbar-width: thin;
+}
+
+.editor-toolbar::-webkit-scrollbar {
+  height: 5px;
+}
+
+.editor-toolbar::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
 }
 
 .toolbar-group {
-  position: relative;
+  display: inline-flex;
+  margin-right: 10px;
+  flex-shrink: 0;
 }
 
-.toolbar-group:not(:last-child)::after {
-  content: '';
-  position: absolute;
-  right: -12px;
-  top: 50%;
-  transform: translateY(-50%);
-  height: 24px;
-  width: 1px;
-  background-color: var(--border-color);
+.toolbar-btn {
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
 }
 
 .editor-toolbar button {
@@ -1520,197 +1525,6 @@
   animation: colorChange 0.3s ease;
 }
 
-/* Stili per il modale della dimensione del testo */
-.mobile-font-size-tool {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background-color: var(--bg-primary);
-  border-top-left-radius: 16px;
-  border-top-right-radius: 16px;
-  padding: 16px;
-  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.2);
-  transform: translateY(100%);
-  transition: transform 0.3s ease;
-  z-index: 2000;
-  max-height: 80vh;
-  overflow-y: auto;
-}
-
-.mobile-font-size-tool.active {
-  transform: translateY(0);
-}
-.tool-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 0.3s ease;
-  z-index: 1999;
-  touch-action: none; /* Previene gli eventi touch di default */
-}
-
-.tool-overlay.active {
-  opacity: 1;
-  visibility: visible;
-  /* Aggiungi backdropTransitionOutTiming per prevenire flickering */
-  backdrop-transition-out-timing: 0;
-}
-
-.tool-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-}
-
-.tool-header h3 {
-  margin: 0;
-  font-size: 18px;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  color: var(--text-primary);
-  padding: 4px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.close-btn:hover {
-  background-color: rgba(0, 0, 0, 0.1);
-}
-
-.swipe-indicator {
-  width: 40px;
-  height: 4px;
-  background-color: var(--border-color);
-  border-radius: 2px;
-  margin: 0 auto 16px;
-}
-
-/* Stili per il testo colorato */
-.ProseMirror .text-styled[style*="color"] {
-  color: inherit;
-}
-
-.ProseMirror span[style*="color"] {
-  color: inherit !important;
-}
-
-/* Assicurati che il testo colorato mantenga il suo colore anche quando selezionato */
-.ProseMirror ::selection {
-  background-color: rgba(var(--accent-color-rgb), 0.2);
-}
-
-[data-theme="dark"] .ProseMirror ::selection {
-  background-color: rgba(var(--accent-color-rgb), 0.3);
-}
-
-.focus-mode .editor-content {
-  max-width: 700px;
-  margin: 0 auto;
-  padding: 40px;
-  background-color: var(--bg-primary);
-  box-shadow: 0 0 30px rgba(0, 0, 0, 0.1);
-}
-
-.focus-mode .ProseMirror {
-  font-size: 1.1rem;
-  line-height: 1.8;
-}
-
-.focus-mode .toolbar,
-.focus-mode .sidebar {
-  opacity: 0.2;
-  transition: opacity 0.3s ease;
-}
-
-.focus-mode .toolbar:hover,
-.focus-mode .sidebar:hover {
-  opacity: 1;
-}
-
-/* Aggiungi questa nuova regola per garantire che gli stili inline abbiano priorità */
-.ProseMirror span[style*="color"] {
-  color: inherit !important;
-}
-
-/* Assicurati che il testo colorato sia visibile in tema scuro */
-[data-theme="dark"] .ProseMirror .text-styled[style*="color"] {
-  color: inherit !important;
-}
-
-/* Migliora la visibilità della selezione in tema scuro */
-[data-theme="dark"] .ProseMirror ::selection {
-  background-color: rgba(108, 92, 231, 0.4);
-}
-
-/* Migliora il selettore di colori */
-.color-picker-grid {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 8px;
-  padding: 12px;
-  background-color: var(--bg-primary);
-  border-radius: 8px;
-  box-shadow: var(--shadow);
-  z-index: 1000;
-}
-
-.color-option {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  cursor: pointer;
-  border: 2px solid transparent;
-  transition: all 0.2s ease;
-  position: relative;
-}
-
-.color-option:hover, 
-.color-option:focus {
-  transform: scale(1.15);
-  box-shadow: 0 0 0 2px var(--bg-primary), 0 0 0 4px var(--accent-color);
-}
-
-.color-option.active {
-  border-color: white;
-  box-shadow: 0 0 0 2px var(--accent-color);
-}
-
-/* Assicurati che il selettore di colori funzioni bene in tema scuro */
-[data-theme="dark"] .color-picker-grid {
-  background-color: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-}
-
-/* Classe specifica per sovrascrivere i colori in tema scuro */
-.color-override[style*="color"] {
-  color: inherit !important;
-}
-
-/* Aggiungi un'animazione per il cambio di colore del testo */
-@keyframes colorChange {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.05); }
-  100% { transform: scale(1); }
-}
-
-.ProseMirror span[style*="color"]:not(:focus-within) {
-  animation: colorChange 0.3s ease;
-}
-
 /* Migliorare il padding dell'editor su mobile per evitare sovrapposizioni */
 @media (max-width: 767px) {
   .mobile-mode .ProseMirror {
@@ -2172,4 +1986,27 @@
   animation: document-appear 0.3s ease-in-out;
   margin: 15px 0;
   clear: both;
+}
+
+/* Indicatore di scroll */
+.has-more-right::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  height: 100%;
+  width: 40px;
+  background: linear-gradient(to right, transparent, var(--toolbar-bg));
+  pointer-events: none;
+}
+
+.has-more-left::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 40px;
+  background: linear-gradient(to left, transparent, var(--toolbar-bg));
+  pointer-events: none;
 }

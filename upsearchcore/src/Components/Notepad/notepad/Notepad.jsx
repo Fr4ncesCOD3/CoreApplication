@@ -49,48 +49,69 @@ const Notepad = ({ theme, toggleTheme }) => {
     }
   })();
   
-  useEffect(() => {
-    // Verifica che l'utente sia autenticato
-    const token = localStorage.getItem('token');
-    const userStr = localStorage.getItem('user');
-    
-    if (!token || !userStr) {
-      showNotification({
-        type: 'warning',
-        message: 'Sessione non valida. Effettua il login per continuare.'
-      });
-      setTimeout(() => navigate('/login'), 500);
-      return;
-    }
-
+  // Funzione per caricare le note, definita con useCallback per poterla utilizzare in più punti
+  const loadNotes = useCallback(async () => {
     try {
-      const userData = JSON.parse(userStr);
-      if (!userData || !userData.id) {
-        throw new Error('Dati utente non validi');
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      if (!user.id) {
+        navigate('/login');
+        return;
       }
       
       setIsLoading(true);
+      console.log("Tentativo di caricamento note per utente:", user.id);
       
-      // Carica le note dell'utente
-      loadNotes().then(() => {
-        // Se siamo all'endpoint /note/ senza ID, ma abbiamo note, reindirizza alla prima nota
-        if (!id && notes.length > 0) {
-          navigate(`/note/${notes[0].id}`);
+      // Tenta un massimo di 3 volte con attesa crescente tra i tentativi
+      const fetchWithRetry = async (retries = 3) => {
+        try {
+          const loadedNotes = await noteApi.getNotes();
+          console.log("Note caricate con successo:", loadedNotes.length);
+          setNotes(loadedNotes);
+          setLastSyncTime(new Date());
+          setConnectionState(prev => ({ ...prev, status: 'online' }));
+          
+          // Verifica e crea le note tutorial se necessario
+          await checkAndCreateTutorialNotes(loadedNotes);
+        } catch (error) {
+          console.error("Errore nel caricamento delle note:", error);
+          
+          if (retries > 0) {
+            const delay = Math.pow(2, 3 - retries) * 1000; // 1s, 2s, 4s
+            console.log(`Ritentativo tra ${delay/1000} secondi...`);
+            
+            // Mostra un toast solo al primo tentativo
+            if (retries === 3) {
+              toast.info("Connessione al server in corso...");
+            }
+            
+            setTimeout(() => fetchWithRetry(retries - 1), delay);
+          } else {
+            toast.error("Impossibile connettersi al server dopo ripetuti tentativi");
+            setConnectionState(prev => ({ ...prev, status: 'offline' }));
+            
+            // Carica le note dalla cache come fallback
+            const cachedNotes = getCachedNotes();
+            if (cachedNotes && cachedNotes.length > 0) {
+              console.log("Note caricate dalla cache locale:", cachedNotes.length);
+              setNotes(cachedNotes);
+              setLastSyncTime(new Date(parseInt(localStorage.getItem('noteCacheTimestamp') || Date.now())));
+            }
+          }
         }
-      }).catch(error => {
-        console.error('Errore nel caricamento iniziale:', error);
-      }).finally(() => {
-        setIsLoading(false);
-      });
+      };
+      
+      await fetchWithRetry();
     } catch (error) {
-      console.error('Errore durante il caricamento del componente Notepad:', error);
-      showNotification({
-        type: 'error',
-        message: 'Errore nei dati utente. Effettua il login per continuare.'
-      });
-      setTimeout(() => navigate('/login'), 500);
+      console.error("Errore generale:", error);
+      toast.error("Si è verificato un errore inaspettato");
+    } finally {
+      setIsLoading(false);
     }
-  }, []);
+  }, [navigate]);
+  
+  useEffect(() => {
+    loadNotes();
+  }, [loadNotes]);
   
   useEffect(() => {
     if (id && notes.length > 0) {
@@ -144,76 +165,154 @@ const Notepad = ({ theme, toggleTheme }) => {
     });
   }, []);
   
-  // Carica note dal server
-  const loadNotes = async () => {
-    if (!user.id) {
-      console.log('Utente non autenticato, impossibile caricare le note');
-      return;
-    }
+  // Funzione per verificare se le note tutorial sono presenti
+  const checkTutorialNotes = (notes) => {
+    if (!notes || notes.length === 0) return false;
     
-    setConnectionState(prev => ({ ...prev, status: 'connecting' }));
+    // Verifica se esistono note con tag 'tutorial' o con isTutorial=true
+    const tutorialNotes = notes.filter(note => 
+      note.isTutorial === true || 
+      (note.tags && note.tags.includes('tutorial'))
+    );
+    
+    // Considera che le note tutorial esistono se ce ne sono almeno 2
+    return tutorialNotes.length >= 2;
+  };
+
+  // Funzione per verificare e creare le note tutorial se necessario
+  const checkAndCreateTutorialNotes = useCallback(async (loadedNotes) => {
+    // Verifica se le note tutorial esistono
+    if (!checkTutorialNotes(loadedNotes)) {
+      console.log("Note tutorial non trovate, creazione in corso...");
+      // Crea le note tutorial
+      await createTutorialNotes();
+    } else {
+      console.log("Note tutorial esistenti, non è necessario crearle");
+    }
+  }, []);
+
+  // Funzione per creare le note tutorial
+  const createTutorialNotes = async () => {
+    console.log("Verifica creazione note tutorial...");
+    
+    // Controlla se le note tutorial esistono già usando i dati attuali
+    if (checkTutorialNotes(notes)) {
+      console.log("Le note tutorial esistono già. Operazione saltata.");
+      return [];
+    }
     
     try {
-      console.log('Tentativo di caricamento note per utente:', user.id);
+      // Chiara indicazione che stiamo creando nuove note tutorial
+      console.log("Creazione note tutorial...");
       
-      // Verifica token
-      const token = localStorage.getItem('token');
-      if (!token) {
-        throw new Error('Token di autenticazione mancante');
-      }
+      // Crea le due note tutorial come prima
+      const welcomeNote = await createNote({
+        title: "Benvenuto in Upsearch Notepad",
+        content: `<h1>Benvenuto in Upsearch Notepad!</h1>
+        <p>Questa è la tua guida rapida per iniziare a utilizzare Upsearch Notepad. Ecco come iniziare:</p>
+        <h2>Funzionalità di base</h2>
+        <ul>
+          <li><strong>Creare una nota:</strong> Clicca sul pulsante "Nuova Nota" nella barra laterale.</li>
+          <li><strong>Modificare una nota:</strong> Seleziona una nota dalla barra laterale e inizia a scrivere.</li>
+          <li><strong>Salvare le modifiche:</strong> Le modifiche vengono salvate automaticamente, ma puoi anche cliccare sul pulsante "Salva" nella barra degli strumenti.</li>
+          <li><strong>Organizzare le note:</strong> Trascina le note nella barra laterale per organizzarle in cartelle.</li>
+        </ul>
+        <p>Upsearch Notepad funziona sia online che offline. Le modifiche fatte offline verranno sincronizzate automaticamente quando tornerai online.</p>`,
+        isTutorial: true,
+        tags: ["tutorial", "guida"]
+      });
       
-      // Carica note dalla cache prima di fare la richiesta
-      const cachedData = getCachedNotes();
-      if (cachedData && cachedData.length > 0) {
-        console.log('Note caricate dalla cache locale:', cachedData.length);
-        setNotes(cachedData);
-        sortNotes(cachedData);
-      }
+      const featuresNote = await createNote({
+        title: "Funzionalità avanzate",
+        content: `<h1>Funzionalità avanzate di Upsearch Notepad</h1>
+        <p>Scopri come sfruttare al massimo Upsearch Notepad con queste funzionalità avanzate:</p>
+        <h2>Formattazione del testo</h2>
+        <ul>
+          <li><strong>Stili di testo:</strong> Usa i pulsanti nella barra degli strumenti per formattare il testo in grassetto, corsivo o come codice.</li>
+          <li><strong>Titoli:</strong> Crea una struttura con i titoli di diversi livelli (H1, H2, H3).</li>
+          <li><strong>Liste:</strong> Crea elenchi puntati o numerati per organizzare le tue informazioni.</li>
+        </ul>
+        <h2>Contenuti multimediali</h2>
+        <ul>
+          <li><strong>Disegni:</strong> Inserisci disegni a mano libera direttamente nelle tue note.</li>
+          <li><strong>Documenti:</strong> Allega file PDF o altri documenti alle tue note.</li>
+          <li><strong>Link:</strong> Inserisci collegamenti a siti web esterni.</li>
+        </ul>
+        <h2>Organizzazione</h2>
+        <ul>
+          <li><strong>Tag:</strong> Aggiungi tag alle tue note per una ricerca più veloce.</li>
+          <li><strong>Ricerca:</strong> Cerca all'interno di tutte le tue note con la funzione di ricerca.</li>
+          <li><strong>Esportazione:</strong> Esporta le tue note in formati come TXT, HTML o PDF.</li>
+        </ul>
+        <p>Esplora queste funzionalità per rendere le tue note più ricche e organizzate!</p>`,
+        isTutorial: true,
+        tags: ["tutorial", "avanzato"]
+      });
       
-      // Richiedi note aggiornate dal server
-      const response = await noteApi.getNotes();
-      console.log('Note caricate con successo:', response.length);
-      
-      const sortedNotes = sortNotes(response);
-      setNotes(sortedNotes);
-      setConnectionState(prev => ({ ...prev, status: 'online' }));
-      
-      // Se ci sono note e nessuna è attualmente selezionata, seleziona la prima
-      if (sortedNotes.length > 0 && !activeNote) {
-        setActiveNote(sortedNotes[0]);
-        navigate(`/note/${sortedNotes[0].id}`);
-      }
-      
-      return sortedNotes;
+      console.log("Note tutorial create con successo");
+      return [welcomeNote, featuresNote];
     } catch (error) {
-      console.error('Errore durante il caricamento delle note:', error);
-      
-      // Gestione errore timeout
-      if (error.code === 'ECONNABORTED') {
-        setConnectionState(prev => ({ ...prev, status: 'offline', lastError: 'timeout' }));
-        toast.error('Impossibile caricare le note dal server. Usando la versione locale.', {
-          autoClose: 5000
-        });
-        
-        // Carica note dalla cache se non già fatto
-        const cachedData = getCachedNotes();
-        if (cachedData && cachedData.length > 0) {
-          console.log('Note caricate dalla cache locale:', cachedData.length);
-          setNotes(cachedData);
-          sortNotes(cachedData);
-          
-          // Se ci sono note e nessuna è attualmente selezionata, seleziona la prima
-          if (cachedData.length > 0 && !activeNote) {
-            setActiveNote(cachedData[0]);
-            navigate(`/note/${cachedData[0].id}`);
-          }
-        }
-      } else {
-        setConnectionState(prev => ({ ...prev, status: 'error', lastError: error.message }));
-      }
-      
-      throw error;
+      console.error("Errore nella creazione delle note tutorial:", error);
+      return [];
     }
+  };
+
+  // Funzione per creare note tutorial locali (senza API)
+  const createLocalTutorialNotes = () => {
+    const welcomeNote = {
+      id: 'local-tutorial-1',
+      title: "Benvenuto in Upsearch Notepad",
+      content: `<h1>Benvenuto in Upsearch Notepad!</h1>
+      <p>Questa è la tua guida rapida per iniziare a utilizzare Upsearch Notepad. Ecco come iniziare:</p>
+      <h2>Funzionalità di base</h2>
+      <ul>
+        <li><strong>Creare una nota:</strong> Clicca sul pulsante "Nuova Nota" nella barra laterale.</li>
+        <li><strong>Modificare una nota:</strong> Seleziona una nota dalla barra laterale e inizia a scrivere.</li>
+        <li><strong>Salvare le modifiche:</strong> Le modifiche vengono salvate automaticamente, ma puoi anche cliccare sul pulsante "Salva" nella barra degli strumenti.</li>
+        <li><strong>Organizzare le note:</strong> Trascina le note nella barra laterale per organizzarle in cartelle.</li>
+      </ul>
+      <p>Upsearch Notepad funziona sia online che offline. Le modifiche fatte offline verranno sincronizzate automaticamente quando tornerai online.</p>`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      userId: user.id,
+      isTutorial: true,
+      temporary: true,
+      tags: ["tutorial", "guida"]
+    };
+    
+    const featuresNote = {
+      id: 'local-tutorial-2',
+      title: "Funzionalità avanzate",
+      content: `<h1>Funzionalità avanzate di Upsearch Notepad</h1>
+      <p>Scopri come sfruttare al massimo Upsearch Notepad con queste funzionalità avanzate:</p>
+      <h2>Formattazione del testo</h2>
+      <ul>
+        <li><strong>Stili di testo:</strong> Usa i pulsanti nella barra degli strumenti per formattare il testo in grassetto, corsivo o come codice.</li>
+        <li><strong>Titoli:</strong> Crea una struttura con i titoli di diversi livelli (H1, H2, H3).</li>
+        <li><strong>Liste:</strong> Crea elenchi puntati o numerati per organizzare le tue informazioni.</li>
+      </ul>
+      <h2>Contenuti multimediali</h2>
+      <ul>
+        <li><strong>Disegni:</strong> Inserisci disegni a mano libera direttamente nelle tue note.</li>
+        <li><strong>Documenti:</strong> Allega file PDF o altri documenti alle tue note.</li>
+        <li><strong>Link:</strong> Inserisci collegamenti a siti web esterni.</li>
+      </ul>
+      <h2>Organizzazione</h2>
+      <ul>
+        <li><strong>Tag:</strong> Aggiungi tag alle tue note per una ricerca più veloce.</li>
+        <li><strong>Ricerca:</strong> Cerca all'interno di tutte le tue note con la funzione di ricerca.</li>
+        <li><strong>Esportazione:</strong> Esporta le tue note in formati come TXT, HTML o PDF.</li>
+      </ul>
+      <p>Esplora queste funzionalità per rendere le tue note più ricche e organizzate!</p>`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      userId: user.id,
+      isTutorial: true,
+      temporary: true,
+      tags: ["tutorial", "avanzato"]
+    };
+    
+    return [welcomeNote, featuresNote];
   };
 
   // Aggiungi un listener per gli aggiornamenti delle note dal background
@@ -244,61 +343,38 @@ const Notepad = ({ theme, toggleTheme }) => {
     };
   }, [activeNote]);
 
-  const createNote = useCallback(async (parentId = null) => {
+  const createNote = async () => {
     try {
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      
       setIsLoading(true);
       
-      const newNote = {
+      // Crea una nuova nota sul server
+      const newNote = await noteApi.createNote({
         title: 'Nuova nota',
         content: '',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        parent: parentId,
         userId: user.id,
-        tags: []
-      };
+        username: user.username
+      });
       
-      let createdNote;
-      try {
-        createdNote = await noteApi.createNote(newNote);
-        console.log('Nota creata con successo:', createdNote);
-      } catch (error) {
-        console.error('Errore nella creazione della nota:', error);
-        
-        if (error.code === 'ECONNABORTED') {
-          createdNote = {
-            ...newNote,
-            id: 'temp-' + Date.now(),
-            temporary: true
-          };
-          
-          toast.warning('Creata nota temporanea. Sarà sincronizzata quando il server sarà disponibile.');
-        } else {
-          throw error;
-        }
-      }
+      console.log("Nota creata con successo:", newNote);
       
       // Aggiorna lo stato con la nuova nota
-      setNotes(prev => [...prev, createdNote]);
-      setActiveNote(createdNote);
+      setNotes(prevNotes => [...prevNotes, newNote]);
       
-      // Importante: aggiorna l'URL con l'ID della nuova nota
-      navigate(`/note/${createdNote.id}`);
+      // Seleziona automaticamente la nuova nota
+      setActiveNote(newNote);
+      navigate(`/note/${newNote.id}`);
       
-      // Aggiorna la cache locale
-      const cachedNotes = getCachedNotes() || [];
-      localStorage.setItem('cachedNotes', JSON.stringify([...cachedNotes, createdNote]));
-      
-      setIsLoading(false);
-      toast.success('Nota creata con successo');
-      return createdNote;
+      return newNote;
     } catch (error) {
-      console.error('Errore nella creazione della nota:', error);
-      toast.error('Impossibile creare la nota. Riprova più tardi.');
+      console.error("Errore nella creazione della nota:", error);
+      toast.error("Impossibile creare una nuova nota");
+      throw error;
+    } finally {
       setIsLoading(false);
-      return null;
     }
-  }, [navigate, user.id]);
+  };
 
   const updateNote = useCallback(async (id, updates) => {
     try {
@@ -522,51 +598,37 @@ const Notepad = ({ theme, toggleTheme }) => {
 
   // Controlla lo stato della connessione
   useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true);
-      checkServerConnection();
-    };
-    
-    const handleOffline = () => {
-      setIsOnline(false);
-      setServerStatus('offline');
-    };
-    
-    const checkServerConnection = async () => {
-      try {
-        // Assumi che il server sia online per evitare errori CORS continui
-        // Durante lo sviluppo locale
-        if (window.location.hostname === 'localhost') {
-          setServerStatus('online');
-          return;
-        }
-        
-        setServerStatus('checking');
-        // Usa l'API che è già configurata per CORS
-        await noteApi.getNotes();
-        setServerStatus('online');
-      } catch (error) {
-        console.warn('Errore nella connessione al server:', error);
-        setServerStatus('connecting');
-        // Riprova dopo 30 secondi (intervallo più lungo per ridurre errori)
-        setTimeout(checkServerConnection, 30000);
+    // Verifica connessione e mostra indicatore appropriato
+    const handleConnectionChange = () => {
+      const isOnline = navigator.onLine;
+      setIsOnline(isOnline);
+      
+      if (isOnline) {
+        // Se torniamo online, sincronizziamo i dati
+        toast.success('Connessione ripristinata. Sincronizzazione in corso...');
+        loadNotes().catch(err => {
+          console.error('Errore durante la sincronizzazione:', err);
+        });
+      } else {
+        toast.warning('Connessione offline. Utilizzo dati locali.');
+        setConnectionState(prev => ({ ...prev, status: 'offline' }));
       }
     };
     
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
+    window.addEventListener('online', handleConnectionChange);
+    window.addEventListener('offline', handleConnectionChange);
     
-    // Controlla lo stato iniziale
-    checkServerConnection();
+    // Controlla lo stato attuale
+    handleConnectionChange();
     
     return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('online', handleConnectionChange);
+      window.removeEventListener('offline', handleConnectionChange);
     };
-  }, []);
+  }, [loadNotes]);
   
   // Aggiungi questa funzione per gestire il passaggio tra note
-  const handleNoteSelection = useCallback((id) => {
+  const handleNoteSelect = useCallback((id) => {
     // Se c'è una modifica non salvata nella nota corrente, chiedi conferma
     if (activeNote && contentChanged) {
       if (!window.confirm('Ci sono modifiche non salvate. Vuoi salvare prima di cambiare nota?')) {
@@ -619,70 +681,61 @@ const Notepad = ({ theme, toggleTheme }) => {
   
   return (
     <div className="notepad-container">
-      <div className="notepad-wrapper d-flex">
+      {/* Sidebar a sinistra */}
+      <div className={`sidebar-container ${isSidebarOpen ? 'open' : ''}`}>
         <Sidebar 
-          notes={searchQuery ? (searchResults || []) : notes}
-          notesFromProps={searchResults || []}
+          notes={notes}
           activeNoteId={activeNote?.id}
-          setActiveNoteId={handleActiveNoteChange}
+          setActiveNoteId={handleNoteSelect}
           createNote={createNote}
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
           theme={theme}
           toggleTheme={toggleTheme}
           moveNote={moveNote}
-          closeSidebar={closeSidebar || (() => {})}
+          closeSidebar={() => setIsSidebarOpen(false)}
           isOpen={isSidebarOpen}
         />
-        
-        <div className={`main-content flex-grow-1 d-flex flex-column ${isSidebarOpen ? 'sidebar-open' : ''}`}>
-          {connectionState.status === 'connecting' && (
-            <div className="connection-banner">
-              <Spinner animation="border" size="sm" /> Connessione al server...
       </div>
-          )}
-          
-          {connectionState.status === 'offline' && (
-            <div className="connection-banner offline">
-              <FiWifi style={{ color: 'red' }} /> Modalità offline
-            </div>
-          )}
-          
-          {activeNote ? (
-            <>
+      
+      {/* Container per Toolbar ed Editor */}
+      <div className="content-container">
+        {/* Toolbar sopra l'editor */}
+        <div className="toolbar-container">
               <Toolbar
                 note={activeNote}
-                updateNote={updateNote}
-                deleteNote={deleteNote}
-                addTag={addTag}
-                removeTag={removeTag}
-                createNote={createNote}
-                onSave={() => handleSaveNote(activeNote.id)}
-                toggleSidebar={toggleSidebar}
+              updateNote={updateNote}
+            deleteNote={deleteNote}
+              addTag={addTag}
+              removeTag={removeTag}
+              createNote={createNote}
+            onSave={handleSaveNote}
+            toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
                 lastSyncTime={lastSyncTime}
                 isOffline={connectionState.status !== 'online'}
                 contentChanged={contentChanged}
               />
-              <div className="editor-wrapper flex-grow-1">
+        </div>
+        
+        {/* Editor sotto la toolbar */}
+        <div className="editor-container">
+          {isLoading ? (
+            <div className="loading-container">
+              <div className="spinner"></div>
+              <p>Caricamento in corso...</p>
+            </div>
+          ) : activeNote ? (
                 <Editor
+              initialContent={activeNote.content}
                   onContentChange={handleContentChange}
-                  initialContent={activeNote.content || ''}
                   activeNote={activeNote}
                   onTitleChange={handleTitleChange}
                   onContentStatusChange={setContentChanged}
                 />
-      </div>
-            </>
           ) : (
-            <div className="no-note-selected d-flex flex-column align-items-center justify-content-center h-100">
-              <h3>Seleziona una nota o creane una nuova</h3>
-              <Button 
-                variant="primary" 
-                className="mt-3" 
-                onClick={() => createNote()}
-              >
-                <FiPlus className="me-2" /> Nuova Nota
-              </Button>
+            <div className="no-note-selected">
+              <p>Seleziona una nota dalla sidebar o crea una nuova nota</p>
+              <Button variant="primary" onClick={createNote}>Crea Nuova Nota</Button>
     </div>
           )}
         </div>

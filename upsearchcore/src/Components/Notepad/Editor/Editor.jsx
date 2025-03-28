@@ -308,6 +308,85 @@ const Editor = ({ onContentChange, initialContent, activeNote, onTitleChange, on
     editable: true,
   })
   
+  // IMPORTANTE: Definisci queste funzioni dopo aver inizializzato l'editor
+  const insertDrawing = useCallback((dataUrl) => {
+    if (!editor) return;
+    
+    const drawingNode = {
+      type: 'drawing',
+      dataUrl: dataUrl || 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=',
+      attrs: {}
+    };
+    
+    editor.chain().focus().insertContent(drawingNode).run();
+  }, [editor]);
+  
+  const processAndInsertFile = useCallback((file) => {
+    if (!editor) return Promise.resolve();
+    
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      const fileName = file.name;
+      const fileType = file.type;
+      const fileSize = file.size;
+      
+      if (fileType.includes('image')) {
+        reader.readAsDataURL(file);
+      } else if (fileType.includes('pdf')) {
+        reader.readAsDataURL(file);
+      } else {
+        reader.readAsText(file);
+      }
+      
+      reader.onload = () => {
+        const fileContent = reader.result;
+        
+        editor.chain().focus().insertContent({
+          type: 'document',
+          attrs: {
+            fileName,
+            fileType,
+            fileSize,
+            fileContent,
+            id: 'doc-' + Date.now() + '-' + Math.floor(Math.random() * 1000)
+          }
+        }).run();
+        
+        resolve();
+      };
+      
+      reader.onerror = () => {
+        console.error('Errore nella lettura del file');
+        resolve(); // Risolvi comunque la promessa per evitare blocchi
+      };
+    });
+  }, [editor]);
+  
+  const insertDocument = useCallback(() => {
+    if (!editor) return;
+    
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.multiple = true;
+    input.onchange = (e) => {
+      setIsLoading(true);
+      
+      // Gestisce più file
+      const files = Array.from(e.target.files);
+      
+      // Processa ogni file in sequenza
+      const processFiles = async () => {
+        for (const file of files) {
+          await processAndInsertFile(file);
+        }
+        setIsLoading(false);
+      };
+      
+      processFiles();
+    };
+    input.click();
+  }, [editor, processAndInsertFile, setIsLoading]);
+  
   // Effetto per applicare la dimensione del testo salvata quando l'editor viene inizializzato
   useEffect(() => {
     if (editor) {
@@ -1184,83 +1263,28 @@ const Editor = ({ onContentChange, initialContent, activeNote, onTitleChange, on
     };
   }, [editor, isMobileDevice]);
 
-  // Sposta la dichiarazione di insertDrawing prima del suo utilizzo (intorno alla linea 823)
-  const insertDrawing = (dataUrl) => {
-    // implementazione della funzione
-    // ... existing code ...
-  };
-
-  // Ora puoi usare insertDrawing qui
+  // Aggiungi questo ref per il riferimento all'editor
+  const editorInstanceRef = useRef(null);
+  
+  // ... existing code ...
+  
+  // Sostituisci tutte le chiamate a editor.current con editor
+  useEffect(() => {
+    if (editor) {
+      editorInstanceRef.current = editor;
+    }
+  }, [editor]);
+  
+  // ... existing code ...
+  
+  // Rimuovi o sostituisci funzioni problematiche come questa:
   const handleMobileInteraction = () => {
-    // ... existing code ...
-    // Rimuovi o correggi la linea che fa riferimento a insertDrawing
-    // ... existing code ...
+    setHasInteracted(true);
+    setIsEditorFocused(true);
+    localStorage.setItem('editorHasInteracted', 'true');
   };
-
-  // Migliora la funzione insertDocument per gestire correttamente i PDF
-  const insertDocument = useCallback(() => {
-    if (!editor) return;
-    
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.multiple = true; // Consente la selezione di più file
-    input.onchange = (e) => {
-      setIsLoading(true);
-      
-      // Gestisce più file
-      const files = Array.from(e.target.files);
-      
-      // Processa ogni file in sequenza
-      const processFiles = async () => {
-        for (const file of files) {
-          await processAndInsertFile(file);
-        }
-        setIsLoading(false);
-      };
-      
-      processFiles();
-    };
-    input.click();
-  }, [editor]);
-
-  // Funzione per processare e inserire un singolo file
-  const processAndInsertFile = useCallback((file) => {
-    if (!editor) return Promise.resolve();
-    
-    return new Promise((resolve) => {
-      const reader = new FileReader();
-      const fileName = file.name;
-      const fileType = file.type;
-      const fileSize = file.size;
-      
-      if (fileType.includes('image')) {
-        reader.readAsDataURL(file);
-      } else if (fileType.includes('pdf')) {
-        reader.readAsDataURL(file);
-      } else {
-        reader.readAsText(file);
-      }
-      
-      reader.onload = () => {
-        const fileContent = reader.result;
-        
-        editor.chain().focus().insertDocument({
-          fileName,
-          fileType,
-          fileSize,
-          fileContent,
-          id: 'doc-' + Date.now() + '-' + Math.floor(Math.random() * 1000)
-        }).run();
-        
-        resolve();
-      };
-      
-      reader.onerror = () => {
-        console.error('Errore nella lettura del file');
-        resolve();
-      };
-    });
-  }, [editor]);
+  
+  // ... existing code ...
 
   // Migliora la gestione del drag and drop
   const handleEditorDrop = (e) => {

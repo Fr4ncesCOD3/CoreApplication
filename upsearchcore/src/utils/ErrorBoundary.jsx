@@ -24,16 +24,27 @@ class ErrorBoundary extends Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="error-container">
-          <h2>Qualcosa è andato storto</h2>
-          <p>Si è verificato un errore nell'applicazione. Prova a ricaricare la pagina.</p>
+        <div className="error-boundary-container">
+          <h2>Si è verificato un errore</h2>
+          <details>
+            <summary>Dettagli dell'errore (per sviluppatori)</summary>
+            <pre>{this.state.error && this.state.error.toString()}</pre>
+            <p>Componenti coinvolti:</p>
+            <pre>{this.state.componentStack}</pre>
+          </details>
           <button 
-            className="btn btn-primary" 
-            onClick={() => window.location.reload()}
+            className="btn btn-primary mt-3"
+            onClick={() => {
+              localStorage.setItem('lastError', JSON.stringify({
+                message: this.state.error && this.state.error.toString(),
+                componentStack: this.state.componentStack,
+                timestamp: new Date().toISOString()
+              }));
+              window.location.reload();
+            }}
           >
-            Ricarica Pagina
+            Ricarica applicazione
           </button>
-          {this.props.children}
         </div>
       );
     }

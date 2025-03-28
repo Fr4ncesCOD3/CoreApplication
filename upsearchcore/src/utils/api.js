@@ -8,7 +8,7 @@ const baseURL = 'https://backend-upsearch.onrender.com';
 // Configura axios con l'URL base e gli header di default
 const api = axios.create({
   baseURL,
-  timeout: 60000, // Aumentato a 60 secondi per render.com
+  timeout: 30000, // Ridotto da 60000 a 30000ms (30 secondi)
   headers: {
     'Content-Type': 'application/json'
   }
@@ -17,6 +17,39 @@ const api = axios.create({
 // Stato globale per tenere traccia di eventuali tentativi di risveglio dell'istanza
 let isWakingUpServer = false;
 let wakingUpPromise = null;
+
+// Aggiungi queste variabili per gestire il backoff esponenziale
+let retryTimeout = 1000; // Timeout iniziale di 1 secondo
+const COOLDOWN_PERIOD = 10000; // 10 secondi di attesa dopo un errore 429
+
+// Aggiungi gestione rate limiting e strategie di fallback
+let lastRequestTime = 0;
+const MIN_REQUEST_INTERVAL = 1000; // 1 secondo tra richieste
+const RATE_LIMIT_COOLDOWN = 5000; // 5 secondi di attesa in caso di errore 429
+const CACHE_TTL = 2 * 60 * 1000; // Ridotto da 5 a 2 minuti
+
+// Aggiungi questo helper di throttling
+let apiThrottleTimers = {};
+
+const throttleApiCall = (key, fn, delay = 2000) => {
+  if (apiThrottleTimers[key]) {
+    clearTimeout(apiThrottleTimers[key]);
+  }
+  
+  return new Promise(resolve => {
+    apiThrottleTimers[key] = setTimeout(async () => {
+      try {
+        const result = await fn();
+        resolve(result);
+      } catch (error) {
+        console.error(`Errore nell'API throttled (${key}):`, error);
+        throw error;
+      } finally {
+        delete apiThrottleTimers[key];
+      }
+    }, delay);
+  });
+};
 
 // Funzione per risvegliare il server
 export const wakeUpServer = async () => {
@@ -388,131 +421,163 @@ export const getCachedNotes = () => {
   return [];
 };
 
-// Modifica getNotes per supportare cache e retry
-export const getNotes = async (retryCount = 0) => {
+// Aggiungi questa funzione per controllare l'età della cache
+const getCacheAge = () => {
+  const timestamp = localStorage.getItem('noteCacheTimestamp');
+  if (!timestamp) return null;
+  
+  const age = Date.now() - parseInt(timestamp, 10);
+  return age;
+};
+
+// Funzione per throttling delle richieste API
+const throttledRequest = async (requestFn) => {
+  const now = Date.now();
+  const elapsed = now - lastRequestTime;
+  
+  if (elapsed < MIN_REQUEST_INTERVAL) {
+    await new Promise(resolve => setTimeout(resolve, MIN_REQUEST_INTERVAL - elapsed));
+  }
+  
+  lastRequestTime = Date.now();
+  return requestFn();
+};
+
+// Ottimizzazione della funzione getNotes per prioritizzare le chiamate online
+const getNotes = async () => {
   try {
-    const token = localStorage.getItem('token');
-    
-    if (!token) {
-      throw new Error('Token non trovato');
+    // Ottieni l'utente corrente
+    const userStr = localStorage.getItem('user');
+    if (!userStr) {
+      console.warn('Utente non autenticato, impossibile recuperare note');
+      return [];
     }
     
-    const response = await api.get('/api/notes', {
-      headers: {
-        'Authorization': `Bearer ${token}`
+    const user = JSON.parse(userStr);
+    if (!user || !user.id) {
+      console.warn('Dati utente non validi');
+      return [];
+    }
+    
+    console.log(`Tentativo di caricamento note per utente: ${user.id}`);
+    
+    // Fai SEMPRE una richiesta al server come prima opzione
+    try {
+      const response = await api.get('/api/notes', { 
+        params: { userId: user.id },
+        timeout: 20000 // Timeout più breve per questa richiesta specifica
+      });
+      
+      if (response.data) {
+        console.log(`Note caricate dal server: ${response.data.length}`);
+        // Aggiorna la cache solo se la richiesta ha successo
+        localStorage.setItem('cachedNotes', JSON.stringify(response.data));
+        localStorage.setItem('noteCacheTimestamp', Date.now().toString());
+        return response.data;
       }
-    });
-    
-    // Salva in cache le note ricevute
-    if (response.data) {
-      localStorage.setItem('cachedNotes', JSON.stringify(response.data));
+    } catch (serverError) {
+      console.error('Errore nella richiesta al server:', serverError);
+      
+      // Se la richiesta al server fallisce, controlla la cache
+      const cachedData = getCachedNotes();
+      const cacheAge = getCacheAge();
+      
+      if (cachedData && cachedData.length > 0 && cacheAge && cacheAge < CACHE_TTL) {
+        console.log(`Fallback alla cache: ${cachedData.length} note, età cache: ${Math.round(cacheAge/1000)}s`);
+        toast.warning('Impossibile connettersi al server, utilizzo dati in cache');
+        return cachedData.filter(note => !note.userId || note.userId === user.id);
+      } else {
+        // Se non ci sono dati in cache o sono troppo vecchi, propaga l'errore
+        toast.error('Impossibile caricare le note dal server e nessun dato locale disponibile');
+        throw serverError;
+      }
     }
-    
-    return response.data;
   } catch (error) {
-    console.error('Errore nel recupero delle note:', error);
-    
-    // Se è un timeout e abbiamo ancora tentativi disponibili
-    if (error.code === 'ECONNABORTED' && retryCount < 2) {
-      console.log(`Tentativo ${retryCount + 1} di recupero note...`);
-      return await getNotes(retryCount + 1);
-    }
-    
-    // Altrimenti ritorna le note dalla cache
-    const cachedNotes = getCachedNotes();
-    if (cachedNotes.length > 0) {
-      return cachedNotes;
-    }
-    
+    console.error('Errore generale nel recupero delle note:', error);
     throw error;
   }
 };
 
-// Modifica createNote per supportare cache e retry
-export const createNote = async (noteData, retryCount = 0) => {
+// Assicuriamoci di esporre questa funzione
+export { getNotes };
+
+// Miglioramento della funzione createNote per garantire la creazione online
+const createNote = async (noteData) => {
   try {
-    const token = localStorage.getItem('token');
+    toast.info('Creazione nota in corso...');
     
-    if (!token) {
-      throw new Error('Token non trovato');
-    }
-    
-    const response = await api.post('/api/notes', noteData, {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
+    const response = await api.post('/api/notes', noteData, { 
+      timeout: 15000 
     });
     
-    // Aggiorna la cache delle note
-    try {
+    // Se la creazione online ha successo, aggiorna la cache
+    if (response.data) {
+      toast.success('Nota creata con successo');
+      
+      // Aggiorna la cache locale
       const cachedNotes = getCachedNotes();
-      cachedNotes.push(response.data);
-      localStorage.setItem('cachedNotes', JSON.stringify(cachedNotes));
-    } catch (e) {
-      // Ignora errori di cache
+      localStorage.setItem('cachedNotes', JSON.stringify([...cachedNotes, response.data]));
+      localStorage.setItem('noteCacheTimestamp', Date.now().toString());
     }
     
     return response.data;
   } catch (error) {
     console.error('Errore nella creazione della nota:', error);
     
-    // Se è un timeout e abbiamo ancora tentativi disponibili
-    if (error.code === 'ECONNABORTED' && retryCount < 2) {
-      console.log(`Tentativo ${retryCount + 1} di creazione nota...`);
-      return await createNote(noteData, retryCount + 1);
+    if (error.response && error.response.status === 429) {
+      toast.error('Troppe richieste. Riprova tra qualche secondo.');
+      throw new Error('Rate limit exceeded');
     }
     
-    // Se ancora fallisce, crea una nota temporanea locale
-    if (error.code === 'ECONNABORTED') {
-      const tempId = 'temp-' + Date.now();
-      const tempNote = {
-        ...noteData,
-        id: tempId,
-        temporary: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-      
-      // Salva in cache
-      const cachedNotes = getCachedNotes();
-      cachedNotes.push(tempNote);
-      localStorage.setItem('cachedNotes', JSON.stringify(cachedNotes));
-      
-      return tempNote;
-    }
-    
+    toast.error('Errore nella creazione della nota. Verifica la connessione.');
     throw error;
   }
 };
 
-// Utilizzo di debounce per il salvataggio delle note
-// Aspetta 800ms di inattività prima di inviare la richiesta
-export const saveNote = debounce(async (noteData) => {
-  try {
-    const response = await api.post('/api/notes', noteData);
-    return response.data;
-  } catch (error) {
-    throw error;
-  }
-}, 800);
-
-// Aggiorna la cache quando una nota viene modificata
+// Ottimizza updateNote per essere più affidabile
 export const updateNote = debounce(async (id, noteData) => {
   try {
+    // Prima di aggiornare, verifica che il server sia raggiungibile
+    let serverAvailable = false;
+    try {
+      serverAvailable = await checkServerStatus();
+    } catch (e) {
+      serverAvailable = false;
+    }
+    
+    if (!serverAvailable) {
+      toast.warning('Server non raggiungibile. Il salvataggio sarà ritardato.');
+      
+      // Memorizza la modifica per sincronizzarla in seguito
+      const pendingUpdates = JSON.parse(localStorage.getItem('pendingUpdates') || '[]');
+      localStorage.setItem('pendingUpdates', JSON.stringify([
+        ...pendingUpdates.filter(p => p.id !== id), // Rimuove aggiornamenti precedenti per la stessa nota
+        { id, data: noteData, timestamp: Date.now() }
+      ]));
+      
+      // Rifiuta la promessa per evitare che il componente pensi che tutto sia andato bene
+      return Promise.reject(new Error('Server non raggiungibile'));
+    }
+    
+    // Se il server è disponibile, procedi con l'aggiornamento
     const response = await api.put(`/api/notes/${id}`, noteData);
     
     // Aggiorna la cache
-    if (notesCache.length > 0) {
-      notesCache = notesCache.map(note => 
-        note.id === id ? response.data : note
+    const cachedNotes = getCachedNotes();
+    if (cachedNotes.length > 0) {
+      const updatedNotes = cachedNotes.map(note => 
+        note.id === id ? { ...note, ...response.data } : note
       );
+      localStorage.setItem('cachedNotes', JSON.stringify(updatedNotes));
+      localStorage.setItem('noteCacheTimestamp', Date.now().toString());
     }
     
     return response.data;
   } catch (error) {
+    console.error(`Errore nell'aggiornamento della nota ${id}:`, error);
     throw error;
   }
-}, 800);
+}, 800); // 800ms di debounce
 
 export const deleteNote = async (id) => {
   try {

@@ -170,36 +170,42 @@ function App() {
   }, []);
   
   return (
-    <BrowserRouter>
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <div className="app" data-theme={theme}>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route 
-            path="/" 
-            element={
-              <PrivateRoute>
-                <Navigate to="/note/" replace />
-              </PrivateRoute>
-            } 
-          />
-          <Route 
-            path="/note/*" 
-            element={
-              <PrivateRoute>
-                <Notepad theme={theme} toggleTheme={toggleTheme} />
-              </PrivateRoute>
-            } 
-          />
-          <Route 
-            path="/note/:id" 
-            element={
-              <PrivateRoute>
-                <Notepad theme={theme} toggleTheme={toggleTheme} />
-              </PrivateRoute>
-            } 
-          />
-        </Routes>
+        <ErrorBoundary>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route 
+              path="/" 
+              element={
+                <PrivateRoute>
+                  <Navigate to="/note/" replace />
+                </PrivateRoute>
+              } 
+            />
+            <Route 
+              path="/note/*" 
+              element={
+                <PrivateRoute>
+                  <ErrorBoundary>
+                    <Notepad theme={theme} toggleTheme={toggleTheme} />
+                  </ErrorBoundary>
+                </PrivateRoute>
+              } 
+            />
+            <Route 
+              path="/note/:id" 
+              element={
+                <PrivateRoute>
+                  <ErrorBoundary>
+                    <Notepad theme={theme} toggleTheme={toggleTheme} />
+                  </ErrorBoundary>
+                </PrivateRoute>
+              } 
+            />
+          </Routes>
+        </ErrorBoundary>
       </div>
     </BrowserRouter>
   );

@@ -57,18 +57,25 @@ const Toolbar = ({
   }
   
   const handleSaveNote = async () => {
-    if (!note) return
+    if (!note) return;
     
-    setLoading(true)
+    setLoading(true);
     try {
-      await onSave()
-      toast.success('Nota salvata con successo')
+      await onSave();
+      toast.success('Nota salvata con successo');
     } catch (error) {
-      toast.error('Errore durante il salvataggio della nota')
+      console.error('Errore durante il salvataggio:', error);
+      
+      // Verifica se è un problema di connessione
+      if (!navigator.onLine || error.message === 'Network Error') {
+        toast.error('Impossibile salvare: nessuna connessione al server');
+      } else {
+        toast.error('Errore durante il salvataggio della nota');
+      }
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
   
   const handleDeleteNote = async () => {
     if (!note) return
@@ -169,6 +176,90 @@ const Toolbar = ({
       });
   };
   
+  const exportNoteAsHtml = () => {
+    if (!note || !note.content) return;
+    
+    // Crea un documento HTML completo
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>${note.title || 'Nota esportata'}</title>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; padding: 20px; }
+          h1, h2, h3 { margin-top: 20px; }
+          pre { background: #f4f4f4; padding: 10px; border-radius: 5px; }
+        </style>
+      </head>
+      <body>
+        <h1>${note.title || 'Nota esportata'}</h1>
+        ${note.content}
+      </body>
+      </html>
+    `;
+    
+    const blob = new Blob([htmlContent], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${note.title || 'Nota'}.html`;
+    document.body.appendChild(a);
+    a.click();
+    
+    // Pulizia
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 100);
+  };
+
+  const exportNoteAsPdf = () => {
+    if (!note) return;
+    
+    toast.info('Preparazione PDF in corso...');
+    
+    // Questo è un approccio semplificato - in produzione potresti voler usare una libreria PDF
+    // o un servizio backend per la conversione
+    
+    const printWindow = window.open('', '_blank');
+    
+    if (!printWindow) {
+      toast.error('Il blocco dei popup ha impedito la generazione del PDF');
+      return;
+    }
+    
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>${note.title || 'Nota esportata'}</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 20px; }
+          @media print {
+            body { margin: 0; padding: 15mm; }
+          }
+        </style>
+      </head>
+      <body>
+        <h1>${note.title || 'Nota esportata'}</h1>
+        ${note.content || ''}
+        <script>
+          window.onload = function() {
+            setTimeout(function() {
+              window.print();
+              window.close();
+            }, 500);
+          }
+        </script>
+      </body>
+      </html>
+    `);
+    
+    printWindow.document.close();
+  };
+  
   return (
     <div className="toolbar">
       <Container fluid>
@@ -191,6 +282,14 @@ const Toolbar = ({
               onBlur={handleTitleBlur}
               onKeyDown={handleTitleKeyDown}
             />
+            
+            {note && note.temporary && (
+              <span className="badge bg-warning ms-2">Versione locale</span>
+            )}
+            
+            {note && note.isTutorial && (
+              <span className="badge bg-success ms-2">Tutorial</span>
+            )}
           </Col>
           
           <Col xs="auto" className="toolbar-right d-flex align-items-center">
@@ -200,9 +299,15 @@ const Toolbar = ({
                 className={`toolbar-btn save-btn ${contentChanged ? 'unsaved' : ''}`} 
                 onClick={handleSaveNote}
                 disabled={loading || !note}
-                title="Salva nota"
+                title={loading ? 'Salvataggio in corso...' : 'Salva nota'}
               >
-                <FiSave />
+                {loading ? (
+                  <div className="spinner-border spinner-border-sm" role="status">
+                    <span className="visually-hidden">Salvataggio in corso...</span>
+                  </div>
+                ) : (
+                  <FiSave />
+                )}
                 {contentChanged && <span className="unsaved-indicator"></span>}
               </Button>
               
@@ -239,8 +344,8 @@ const Toolbar = ({
                 
                 <Dropdown.Menu>
                   <Dropdown.Item onClick={exportNoteAsText}>Esporta come TXT</Dropdown.Item>
-                  <Dropdown.Item onClick={() => exportNoteAsHtml()}>Esporta come HTML</Dropdown.Item>
-                  <Dropdown.Item onClick={() => exportNoteAsPdf()}>Esporta come PDF</Dropdown.Item>
+                  <Dropdown.Item onClick={exportNoteAsHtml}>Esporta come HTML</Dropdown.Item>
+                  <Dropdown.Item onClick={exportNoteAsPdf}>Esporta come PDF</Dropdown.Item>
                 </Dropdown.Menu>
               </Dropdown>
               
@@ -301,9 +406,9 @@ const Toolbar = ({
             
             {lastSyncTime && (
               <div className="sync-info ms-2">
-                <small className={`text-muted ${contentChanged ? 'text-warning' : ''}`}>
+                <small className={`${isOffline ? 'text-danger' : (contentChanged ? 'text-warning' : 'text-success')}`}>
                   {isOffline ? '🔴 Offline' : (contentChanged ? '🟠 Modificato' : '🟢 Salvato')}
-                  {!contentChanged && <span className="ms-1">{formatTimestamp(lastSyncTime)}</span>}
+                  {!contentChanged && !isOffline && <span className="ms-1">{formatTimestamp(lastSyncTime)}</span>}
                 </small>
               </div>
             )}
@@ -313,89 +418,5 @@ const Toolbar = ({
     </div>
   )
 }
-
-const exportNoteAsHtml = () => {
-  if (!note || !note.content) return;
-  
-  // Crea un documento HTML completo
-  const htmlContent = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <title>${note.title || 'Nota esportata'}</title>
-      <style>
-        body { font-family: Arial, sans-serif; line-height: 1.6; padding: 20px; }
-        h1, h2, h3 { margin-top: 20px; }
-        pre { background: #f4f4f4; padding: 10px; border-radius: 5px; }
-      </style>
-    </head>
-    <body>
-      <h1>${note.title || 'Nota esportata'}</h1>
-      ${note.content}
-    </body>
-    </html>
-  `;
-  
-  const blob = new Blob([htmlContent], { type: 'text/html' });
-  const url = URL.createObjectURL(blob);
-  
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${note.title || 'Nota'}.html`;
-  document.body.appendChild(a);
-  a.click();
-  
-  // Pulizia
-  setTimeout(() => {
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }, 100);
-};
-
-const exportNoteAsPdf = () => {
-  if (!note) return;
-  
-  toast.info('Preparazione PDF in corso...');
-  
-  // Questo è un approccio semplificato - in produzione potresti voler usare una libreria PDF
-  // o un servizio backend per la conversione
-  
-  const printWindow = window.open('', '_blank');
-  
-  if (!printWindow) {
-    toast.error('Il blocco dei popup ha impedito la generazione del PDF');
-    return;
-  }
-  
-  printWindow.document.write(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>${note.title || 'Nota esportata'}</title>
-      <style>
-        body { font-family: Arial, sans-serif; padding: 20px; }
-        @media print {
-          body { margin: 0; padding: 15mm; }
-        }
-      </style>
-    </head>
-    <body>
-      <h1>${note.title || 'Nota esportata'}</h1>
-      ${note.content || ''}
-      <script>
-        window.onload = function() {
-          setTimeout(function() {
-            window.print();
-            window.close();
-          }, 500);
-        }
-      </script>
-    </body>
-    </html>
-  `);
-  
-  printWindow.document.close();
-};
 
 export default Toolbar

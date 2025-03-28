@@ -6,6 +6,7 @@ import { InputGroup, Form, Button } from 'react-bootstrap'
 import './Sidebar.css'
 import { noteApi } from '../../../utils/api'
 import { toast } from '../../../utils/notification'
+import Notes from './Notes'
 
 const Sidebar = ({ 
   notes = [], 
@@ -34,33 +35,59 @@ const Sidebar = ({
     }
   }, [searchQuery]);
   
-  // Utilizza le note filtrate da Notepad se disponibili, altrimenti filtra localmente
+  // Aggiorna questo useEffect per filtrare per utente e ordinare meglio le note
   useEffect(() => {
-    if (searchTerm) {
-      // Se notesFromProps contiene già risultati filtrati, usali
-      if (notesFromProps && notesFromProps.length > 0 && searchQuery === searchTerm) {
-        setFilteredNotes(notesFromProps);
-      } else {
-        // Altrimenti filtra localmente
-        const lowerCaseSearch = searchTerm.toLowerCase();
-        const filtered = notes.filter(note => 
-          note.title.toLowerCase().includes(lowerCaseSearch) ||
-          (note.content && typeof note.content === 'string' && note.content.toLowerCase().includes(lowerCaseSearch))
-        );
-        setFilteredNotes(filtered);
-      }
-      
-      // Notifica il componente parent del cambio di ricerca
-      if (setSearchQuery && searchTerm !== searchQuery) {
-        setSearchQuery(searchTerm);
-      }
-    } else {
-      setFilteredNotes(notes);
-      if (setSearchQuery && searchQuery !== '') {
-        setSearchQuery('');
-      }
+    // Ottieni info utente
+    const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+    const userId = currentUser?.id;
+    
+    if (!userId) {
+      console.warn('Nessun utente autenticato, impossibile filtrare le note');
+      setFilteredNotes([]);
+      return;
     }
-  }, [notes, notesFromProps, searchTerm, searchQuery, setSearchQuery]);
+    
+    console.log(`Filtraggio note per utente ${userId}, totale note: ${notes.length}`);
+    
+    // Filtra le note per utente corrente
+    const userNotes = notes.filter(note => 
+      !note.userId || note.userId === userId || note.isTutorial
+    );
+    
+    console.log(`Note filtrate per utente: ${userNotes.length}`);
+    
+    // Se non c'è un termine di ricerca, ordina le note per data
+    if (!searchTerm) {
+      const sortedNotes = [...userNotes].sort((a, b) => {
+        // Metti le note tutorial in cima
+        if (a.isTutorial && !b.isTutorial) return -1;
+        if (!a.isTutorial && b.isTutorial) return 1;
+        
+        // Per le altre note, ordina per data di aggiornamento (dalla più recente)
+        const dateA = new Date(a.updatedAt || a.createdAt);
+        const dateB = new Date(b.updatedAt || b.createdAt);
+        return dateB - dateA;
+      });
+      
+      setFilteredNotes(sortedNotes);
+      return;
+    }
+    
+    // Se c'è un termine di ricerca, filtra le note dell'utente
+    const lowerCaseSearch = searchTerm.toLowerCase();
+    const filtered = userNotes.filter(note => 
+      (note.title && note.title.toLowerCase().includes(lowerCaseSearch)) ||
+      (note.content && typeof note.content === 'string' && note.content.toLowerCase().includes(lowerCaseSearch))
+    );
+    
+    console.log(`Note filtrate per ricerca "${searchTerm}": ${filtered.length}`);
+    setFilteredNotes(filtered);
+    
+    // Notifica il componente parent del cambio di ricerca
+    if (setSearchQuery && searchTerm !== searchQuery) {
+      setSearchQuery(searchTerm);
+    }
+  }, [notes, searchTerm, searchQuery, setSearchQuery]);
   
   // Espande automaticamente la cartella quando una nota al suo interno è attiva
   useEffect(() => {
@@ -131,22 +158,32 @@ const Sidebar = ({
   }
   
   const renderNoteTree = (parentId = null, level = 0, isDragging = false) => {
+    // Filtriamo le note che hanno il parent specificato
     const notesToRender = filteredNotes.filter(note => note.parent === parentId);
+    
+    // Aggiungiamo un log per debug
+    console.log(`Rendering notes with parent ${parentId}: ${notesToRender.length} notes found`);
     
     if (notesToRender.length === 0) return null;
     
     return (
       <ul className={`note-list ${level > 0 ? 'nested' : ''}`} style={{ paddingLeft: level > 0 ? `${level * 16}px` : '0' }}>
         {notesToRender.map(note => {
-          const hasChildren = notes.some(n => n.parent === note.id)
-          const isExpanded = expandedFolders[note.id]
+          const hasChildren = notes.some(n => n.parent === note.id);
+          const isExpanded = expandedFolders[note.id];
+          const isTutorial = note.isTutorial || (note.tags && note.tags.includes('tutorial'));
+          const isTemporary = note.temporary === true;
+          
+          // Formattazione della data per maggiore leggibilità
+          const updatedAt = note.updatedAt || note.createdAt;
+          const formattedDate = updatedAt ? new Date(updatedAt).toLocaleDateString() : '';
           
           return (
-            <li key={note.id}>
+            <li key={note.id} className="note-item-container">
               <Draggable 
                 draggableId={note.id} 
                 index={notes.indexOf(note)} 
-                isDragDisabled={isDragging}
+                isDragDisabled={isDragging || isTutorial || isTemporary}
                 key={note.id}
               >
                 {(provided) => (
@@ -154,21 +191,28 @@ const Sidebar = ({
                     ref={provided.innerRef}
                     {...provided.draggableProps}
                     {...provided.dragHandleProps}
-                    className={`note-item ${activeNoteId === note.id ? 'active' : ''}`}
+                    className={`note-item ${activeNoteId === note.id ? 'active' : ''} ${isTutorial ? 'tutorial' : ''} ${isTemporary ? 'temporary' : ''}`}
                   >
                     <div className="note-item-content" onClick={() => handleNoteClick(note.id)}>
                       {hasChildren && (
                         <button 
                           className="toggle-btn"
                           onClick={(e) => {
-                            e.stopPropagation()
-                            toggleFolder(note.id)
+                            e.stopPropagation();
+                            toggleFolder(note.id);
                           }}
                         >
                           {isExpanded ? <FiChevronDown /> : <FiChevronRight />}
                         </button>
                       )}
-                      <span className="note-title">{note.title || 'Senza titolo'}</span>
+                      <div className="note-details">
+                        <span className={`note-title ${isTutorial ? 'tutorial-title' : ''} ${isTemporary ? 'temporary-title' : ''}`}>
+                          {note.title || 'Senza titolo'}
+                          {isTemporary && <span className="badge badge-warning ms-1">(locale)</span>}
+                          {isTutorial && <span className="badge badge-success ms-1">(tutorial)</span>}
+                        </span>
+                        <span className="note-date">{formattedDate}</span>
+                      </div>
                     </div>
                     
                     {hasChildren && isExpanded && (
@@ -177,6 +221,7 @@ const Sidebar = ({
                           <div
                             ref={provided.innerRef}
                             {...provided.droppableProps}
+                            className="nested-notes"
                           >
                             {renderNoteTree(note.id, level + 1, isDragging)}
                             {provided.placeholder}
@@ -224,6 +269,14 @@ const Sidebar = ({
       setLoading(false)
     }
   }
+  
+  // Aggiungi questa funzione helper al componente Sidebar per le props di default
+  const getDefaultDraggableProps = (draggableProps = {}) => {
+    return {
+      isDragDisabled: false,
+      ...draggableProps
+    };
+  };
   
   return (
     <div className={`sidebar h-100 d-flex flex-column ${isOpen ? 'open' : ''}`}>
@@ -286,26 +339,12 @@ const Sidebar = ({
       </div>
       
       <div className="notes-container flex-grow-1 overflow-auto px-2">
-        <DragDropContext onDragEnd={handleDragEnd}>
-          <Droppable droppableId="root" type="note">
-            {(provided, snapshot) => (
-              <div
-                ref={provided.innerRef}
-                {...provided.droppableProps}
-                className="droppable-container"
-              >
-                {filteredNotes.length === 0 ? (
-                  <div className="no-notes">
-                    {searchTerm ? 'Nessun risultato trovato' : 'Nessuna nota disponibile'}
-                  </div>
-                ) : (
-                  renderNoteTree(null, 0, snapshot.isDraggingOver)
-                )}
-                {provided.placeholder}
-              </div>
-            )}
-          </Droppable>
-        </DragDropContext>
+        <Notes 
+          notes={filteredNotes} 
+          activeNoteId={activeNoteId} 
+          onNoteSelect={handleNoteClick} 
+          onCreateNote={(parentId) => createNote({ parent: parentId })} 
+        />
       </div>
     </div>
   )

@@ -1,31 +1,48 @@
 .notepad-container {
   display: flex;
-  flex-direction: column;
   height: 100vh;
   overflow: hidden;
-  background-color: var(--bg-primary);
 }
 
-.sidebar-wrapper {
+.sidebar-container {
   width: 280px;
-  height: 100vh;
-  transition: width 0.3s ease, transform 0.3s ease;
-  overflow: hidden;
   flex-shrink: 0;
+  height: 100%;
   border-right: 1px solid var(--border-color);
+  transition: transform 0.3s ease;
+  overflow-y: auto;
+  background-color: var(--sidebar-bg, #f5f5f5);
 }
 
-.sidebar-wrapper.closed {
-  width: 0;
-}
-
-.content-wrapper {
+.content-container {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  flex-grow: 1;
+  height: 100%;
   overflow: hidden;
+}
+
+.toolbar-container {
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.editor-container {
+  flex-grow: 1;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.toolbar {
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.editor-wrapper {
   flex: 1;
-  min-width: 0; /* Previene overflow su schermi piccoli */
+  overflow: auto;
+  padding: 1rem;
 }
 
 .toolbar-wrapper {
@@ -36,15 +53,6 @@
   z-index: 10;
 }
 
-.editor-wrapper {
-  overflow: auto;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  background-color: var(--bg-primary);
-  padding: 1rem;
-}
-
 .welcome-container {
   padding: 2rem;
   text-align: center;
@@ -53,15 +61,31 @@
   margin: 0 auto;
 }
 
-.no-note-selected, .loading-container {
+.loading-container,
+.no-note-selected {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
   padding: 20px;
   text-align: center;
   color: var(--text-secondary);
 }
 
-.loading-container .spinner-border {
-  width: 3rem;
-  height: 3rem;
+.spinner {
+  border: 4px solid rgba(0, 0, 0, 0.1);
+  border-radius: 50%;
+  border-top: 4px solid var(--primary);
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+  margin-bottom: 20px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 .sidebar-toggle-btn {
@@ -83,44 +107,42 @@
   font-size: 24px;
 }
 
-/* Migliora la responsività */
+/* Mobile styles */
 @media (max-width: 768px) {
-  .sidebar-wrapper {
-    position: fixed;
-    z-index: 1000;
-    width: 280px; 
-    box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
-    left: 0;
-    top: 0;
-    transform: translateX(-100%);
+  .notepad-container {
+    flex-direction: column;
   }
   
-  .sidebar-wrapper.open {
-    transform: translateX(0);
-    width: 280px;
-  }
-  
-  .content-wrapper {
+  .sidebar-container {
     width: 100%;
+    height: auto;
+    max-height: 50vh;
+    transform: translateY(-100%);
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    border-right: none;
+    border-bottom: 1px solid var(--border-color);
   }
   
-  .editor-wrapper {
-    padding: 0.5rem;
+  .sidebar-container.open {
+    transform: translateY(0);
   }
   
-  .connection-status {
-    font-size: 10px;
-    padding: 4px 8px;
+  .content-container {
+    width: 100%;
   }
 }
 
 /* Stile migliore per schermi più grandi */
 @media (min-width: 1200px) {
-  .sidebar-wrapper {
+  .sidebar-container {
     width: 320px;
   }
   
-  .content-wrapper {
+  .content-container {
     flex: 3; /* Dai più spazio all'editor su schermi grandi */
   }
 }
@@ -154,11 +176,6 @@
 
 .sync-indicator-icon {
   animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
 }
 
 .connection-status {
@@ -220,4 +237,32 @@
   padding: 8px;
   font-size: 14px;
   z-index: 1000;
+}
+
+/* Stili per la visualizzazione dei messaggi di errore e offline */
+.connection-banner {
+  padding: 0.5rem;
+  text-align: center;
+  background-color: #f8d7da;
+  color: #721c24;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.connection-banner.offline {
+  background-color: #fff3cd;
+  color: #856404;
+}
+
+/* Miglioramenti per le note tutorial */
+.note-item.tutorial {
+  border-left: 3px solid #28a745;
+}
+
+.note-title.tutorial-title {
+  font-weight: bold;
+  color: #28a745;
 }
