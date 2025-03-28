@@ -373,3 +373,41 @@
     padding: 5px 8px;
   }
 }
+
+/* Stile per il pulsante di salvataggio con modifiche non salvate */
+.toolbar-btn.save-btn.unsaved {
+  position: relative;
+  color: #e67e22;
+}
+
+.unsaved-indicator {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 8px;
+  height: 8px;
+  background-color: #e67e22;
+  border-radius: 50%;
+}
+
+/* Stile per il pulsante di condivisione */
+.toolbar-btn.share-btn {
+  color: var(--text-primary);
+}
+
+.toolbar-btn.share-btn:hover {
+  color: #3498db;
+}
+
+/* Migliora la visualizzazione delle informazioni di sincronizzazione */
+.sync-info {
+  font-size: 0.8rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 150px;
+}
+
+.text-warning {
+  color: #e67e22 !important;
+}

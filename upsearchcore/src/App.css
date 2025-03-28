@@ -44,12 +44,19 @@
 }
 
 :root {
-  --bg-primary: #121212;
-  --bg-secondary: #1e1e1e;
-  --text-primary: #ffffff;
-  --text-secondary: #b0b0b0;
+  --primary-color: #6c5ce7;
+  --primary-hover: #5348b8;
   --accent-color: #6c5ce7;
-  --border-color: #333333;
+  --text-primary: #333;
+  --text-secondary: #666;
+  --bg-primary: #fff;
+  --bg-secondary: #f8f9fa;
+  --border-color: #dee2e6;
+  --input-bg: #fff;
+  --success-color: #28a745;
+  --danger-color: #dc3545;
+  --warning-color: #ffc107;
+  --info-color: #17a2b8;
   --sidebar-width: 250px;
   --toolbar-height: 50px;
   --shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
@@ -74,14 +81,21 @@
   }
 }
 
-[data-theme="light"] {
-  --bg-primary: #ffffff;
-  --bg-secondary: #f7f7f7;
-  --text-primary: #333333;
-  --text-secondary: #666666;
-  --accent-color: #6c5ce7;
-  --border-color: #e5e5e5;
-  --shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+[data-theme="dark"] {
+  --primary-color: #7d6fdd;
+  --primary-hover: #6658d3;
+  --accent-color: #7d6fdd;
+  --text-primary: #f8f9fa;
+  --text-secondary: #adb5bd;
+  --bg-primary: #343a40;
+  --bg-secondary: #212529;
+  --border-color: #495057;
+  --input-bg: #2a3136;
+  --success-color: #2fb748;
+  --danger-color: #e74c3c;
+  --warning-color: #f1c40f;
+  --info-color: #3498db;
+  --shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .app {
@@ -95,25 +109,30 @@
 body {
   margin: 0;
   padding: 0;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", sans-serif;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   min-width: 100%;
   min-height: 100vh;
   background-color: var(--bg-primary);
   color: var(--text-primary);
+  overflow: hidden;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 * {
+  margin: 0;
+  padding: 0;
   box-sizing: border-box;
 }
 
 /* Personalizzazione dei componenti Bootstrap */
 .btn-primary {
-  background-color: var(--accent-color);
-  border-color: var(--accent-color);
+  background-color: var(--primary-color);
+  border-color: var(--primary-color);
 }
 
-.btn-primary:hover {
-  opacity: 0.9;
+.btn-primary:hover, .btn-primary:focus {
+  background-color: var(--primary-hover);
+  border-color: var(--primary-hover);
 }
 
 .btn-light {
@@ -129,16 +148,16 @@ body {
 }
 
 .form-control {
-  background-color: var(--bg-primary);
   color: var(--text-primary);
+  background-color: var(--input-bg);
   border-color: var(--border-color);
 }
 
 .form-control:focus {
-  background-color: var(--bg-primary);
   color: var(--text-primary);
-  border-color: var(--accent-color);
-  box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+  background-color: var(--input-bg);
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 0.25rem rgba(108, 92, 231, 0.25);
 }
 
 .input-group-text {
@@ -159,4 +178,117 @@ body {
 
 .modal-footer {
   border-top-color: var(--border-color);
+}
+
+/* Transizioni per rendere i cambiamenti di tema più fluidi */
+.app-container, .sidebar, .notepad-container, .toolbar, .editor-content,
+.toast, .card, .form-control, .btn {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Scrollbar personalizzata */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 0, 0, 0.3);
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Spinner personalizzato */
+.spinner-border {
+  color: var(--primary-color);
+}
+
+/* Messaggi di errore */
+.error-message {
+  color: var(--danger-color);
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+}
+
+/* Stile per il focus */
+:focus {
+  outline: none;
+}
+
+.form-control:focus, .btn:focus {
+  box-shadow: 0 0 0 0.25rem rgba(108, 92, 231, 0.25);
+}
+
+/* Correzione per dispositivi mobili */
+@media (max-width: 768px) {
+  body {
+    font-size: 14px;
+  }
+  
+  .container, .container-fluid {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+}
+
+/* Indicatori visivi per lo stato offline/online */
+.online-indicator, .offline-indicator {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 6px;
+  border-radius: 12px;
+  font-size: 12px;
+  margin-left: 8px;
+}
+
+.online-indicator {
+  background-color: rgba(40, 167, 69, 0.1);
+  color: var(--success-color);
+}
+
+.offline-indicator {
+  background-color: rgba(220, 53, 69, 0.1);
+  color: var(--danger-color);
+}
+
+/* Animazioni */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.fade-in {
+  animation: fadeIn 0.3s ease forwards;
+}
+
+@keyframes slideIn {
+  from { transform: translateY(-10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.slide-in {
+  animation: slideIn 0.3s ease forwards;
+}
+
+/* Contenitore globale per i toast */
+.toast-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9999;
 }

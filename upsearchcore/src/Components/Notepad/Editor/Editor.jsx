@@ -23,6 +23,8 @@ import { IoColorPaletteOutline } from 'react-icons/io5'
 import DrawingNode from './DrawingNode'
 import DocumentNode from './DocumentNode'
 import './Editor.css'
+import { toast } from '../../../utils/notification'
+import api from '../../../utils/api'
 
 // Funzione di utilità per il debounce
 function debounce(func, wait) {
@@ -98,7 +100,7 @@ const colorOptions = [
 ];
 
 // Componente Editor
-const Editor = ({ onContentChange, initialContent }) => {
+const Editor = ({ onContentChange, initialContent, activeNote, onTitleChange, onContentStatusChange = () => {} }) => {
   // Stati per gestire i vari aspetti dell'editor
   const [showLinkModal, setShowLinkModal] = useState(false)
   const [linkUrl, setLinkUrl] = useState('')
@@ -139,92 +141,28 @@ const Editor = ({ onContentChange, initialContent }) => {
   // Aggiungi uno stato per il caricamento
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleInput = () => {
-    console.log('📝 Editor input/update rilevato')
-    
-    // Assicurati che tutti i nodi di disegno abbiano i loro attributi aggiornati
-    if (editor) {
-      const json = editor.getJSON()
-      
-      // Controlla se ci sono nodi di disegno nel contenuto
-      const hasDrawings = json.content.some(node => 
-        node.type === 'drawing' || 
-        (node.content && node.content.some(child => child.type === 'drawing'))
-      )
-      
-      // Se ci sono disegni, assicurati che vengano salvati correttamente
-      if (hasDrawings) {
-        // Forza un aggiornamento dell'editor per assicurarsi che tutti gli attributi siano aggiornati
-        setTimeout(() => {
-          if (onContentChange) {
-            onContentChange(editor.getHTML())
-          }
-        }, 100)
-      } else {
-        // Comportamento normale
-        if (onContentChange) {
-          onContentChange(editor.getHTML())
-        }
-      }
-    }
-  }
-
-  const handleSelectionChange = () => {
-    console.log('🔍 Editor selection change rilevato')
-    // Rimuoviamo qualsiasi logica che potrebbe influenzare i modali
-  }
-
-  // Modifichiamo la gestione del tap per evitare aperture indesiderate
-  const handleTap = (e) => {
-    if (!isMobile) return
-    
-    // Verifichiamo che il tap sia su un pulsante specifico
-    const isToolbarButton = e.target.closest('.mobile-toolbar-btn')
-    if (!isToolbarButton) {
-      // Se non è un pulsante della toolbar, chiudiamo i modali
-      setShowMobileFontSizeTool(false)
-      setShowMobileColorPicker(false)
-    }
-  }
-
-  const handleMobileFontSizeToggleButton = () => {
-    console.log('📏 Toggle font size tool');
-    
-    // Chiudi l'altro modale se aperto
-    if (showColorPicker) {
-      setShowColorPicker(false);
-    }
-    
-    // Controlla se stiamo aprendo o chiudendo
-    if (!showMobileFontSizeTool) {
-      console.log("🔍 Apertura font size tool");
-      // Applica immediatamente la dimensione corrente
-      const detectedSize = detectFontSize();
-      setCurrentFontSize(parseInt(detectedSize) || 16);
-      
-      // Stiamo aprendo il tool
-      document.body.classList.add('font-size-tool-open');
-      document.body.style.overflow = 'hidden';
-    } else {
-      console.log("🔍 Chiusura font size tool");
-      // Stiamo chiudendo il tool
-      document.body.classList.remove('font-size-tool-open');
-      document.body.style.overflow = '';
-    }
-    
-    // Inverti lo stato
-    setShowMobileFontSizeTool(prev => !prev);
-    setLastAction("font-size-toggle");
-  };
-
-  const handleMobileColorPickerToggle = () => {
-    console.log('🎨 Toggle color picker')
-    setLastAction('color')
-    setShowMobileColorPicker(prev => !prev)
-    setShowMobileFontSizeTool(false) // Chiudi l'altro modale
-  }
-
-  // Configurazione dell'editor TipTap
+  // Riferimento per l'intervallo di salvataggio automatico
+  const autoSaveIntervalRef = useRef(null);
+  
+  // Riferimento per tracciare modifiche
+  const lastChangeRef = useRef(new Date());
+  const autoSaveTimeoutRef = useRef(null);
+  
+  // Aggiungi questi nuovi stati
+  const [lastSavedContent, setLastSavedContent] = useState('');
+  const [contentChanged, setContentChanged] = useState(false);
+  const autoSaveTimerRef = useRef(null);
+  
+  // Aggiungi stato per il buffer e lo stato del salvataggio
+  const [saveBuffer, setSaveBuffer] = useState(null);
+  const [saveState, setSaveState] = useState({
+    lastSaved: null,
+    saveInProgress: false,
+    pendingChanges: false,
+    retryCount: 0
+  });
+  
+  // Configura l'editor e il salvataggio automatico all'avvio
   const editor = useEditor({
     extensions: [
       Document,
@@ -347,13 +285,25 @@ const Editor = ({ onContentChange, initialContent }) => {
           setIsEditorFocused(false);
           return false;
         },
+        input: () => {
+          // Marca il contenuto come modificato quando l'utente digita
+          setContentChanged(true);
+          return false;
+        }
       },
       attributes: {
         class: 'mobile-optimized',
       },
     },
     content: initialContent || '',
-    onUpdate: handleInput,
+    onUpdate: (props) => {
+      if (props.editor) {
+        const currentContent = props.editor.getHTML();
+        if (onContentChange) {
+          onContentChange(currentContent);
+        }
+      }
+    },
     autofocus: false,
     editable: true,
   })
@@ -429,7 +379,7 @@ const Editor = ({ onContentChange, initialContent }) => {
   }, [editor, linkUrl])
   
   // Modifica la funzione applyFontSize per salvare la dimensione corrente
-  const applyFontSize = (size) => {
+  const applyFontSize = useCallback((size) => {
     if (!editor) return;
     
     // Converti il valore numerico in pixel
@@ -461,10 +411,10 @@ const Editor = ({ onContentChange, initialContent }) => {
         .setMark('textStyle', { fontSize: fontSizePx })
         .run();
     }
-  }
+  }, [editor]);
   
   // Aggiungi questa nuova funzione per rilevare la dimensione del testo selezionato
-  const detectFontSize = () => {
+  const detectFontSize = useCallback(() => {
     if (!editor) return 16 // Dimensione predefinita
     
     const selection = window.getSelection()
@@ -491,10 +441,10 @@ const Editor = ({ onContentChange, initialContent }) => {
     }
     
     return fontSize
-  }
+  }, [editor])
   
   // Modifica la funzione handleFontSizeButtonClick per rilevare la dimensione attuale
-  const handleFontSizeButtonClick = () => {
+  const handleFontSizeButtonClick = useCallback(() => {
     if (isMobileDevice) {
       // Su mobile, mostra il tool dedicato
       setShowFontSizeSlider(!showFontSizeSlider);
@@ -509,7 +459,7 @@ const Editor = ({ onContentChange, initialContent }) => {
         }
       }
     }
-  }
+  }, [editor, isMobileDevice, showFontSizeSlider]);
   
   // Aggiungi un listener per il click nell'editor per rilevare la dimensione del testo
   useEffect(() => {
@@ -725,7 +675,9 @@ const Editor = ({ onContentChange, initialContent }) => {
   let lastTap = 0;
   
   // Modifica il componente MobileToolbar per migliorare la gestione del touch
-  const MobileToolbar = () => {
+  const MobileToolbar = useCallback(() => {
+    if (!editor) return null;
+    
     // Aggiungi questa funzione per gestire meglio i tocchi sui pulsanti
     const handleToolbarButtonTouch = (action) => {
       // Previeni il comportamento di default del browser
@@ -752,7 +704,7 @@ const Editor = ({ onContentChange, initialContent }) => {
             {/* Gruppo per la formattazione del testo */}
             <Button
               variant="link"
-              className={`mobile-toolbar-btn ${editor && editor.isActive('bold') ? 'active' : ''}`}
+              className={`mobile-toolbar-btn ${editor.isActive('bold') ? 'active' : ''}`}
               onClick={() => handleToolbarButtonTouch(() => editor.chain().focus().toggleBold().run())}
               aria-label="Grassetto"
             >
@@ -761,7 +713,7 @@ const Editor = ({ onContentChange, initialContent }) => {
             
             <Button
               variant="link"
-              className={`mobile-toolbar-btn ${editor && editor.isActive('italic') ? 'active' : ''}`}
+              className={`mobile-toolbar-btn ${editor.isActive('italic') ? 'active' : ''}`}
               onClick={() => handleToolbarButtonTouch(() => editor.chain().focus().toggleItalic().run())}
               aria-label="Corsivo"
             >
@@ -770,7 +722,7 @@ const Editor = ({ onContentChange, initialContent }) => {
             
             <Button
               variant="link"
-              className={`mobile-toolbar-btn ${editor && editor.isActive('code') ? 'active' : ''}`}
+              className={`mobile-toolbar-btn ${editor.isActive('code') ? 'active' : ''}`}
               onClick={() => handleToolbarButtonTouch(() => editor.chain().focus().toggleCode().run())}
               aria-label="Codice"
             >
@@ -780,7 +732,7 @@ const Editor = ({ onContentChange, initialContent }) => {
             {/* Gruppo per i titoli */}
             <Button
               variant="link"
-              className={`mobile-toolbar-btn ${editor && editor.isActive('heading', { level: 1 }) ? 'active' : ''}`}
+              className={`mobile-toolbar-btn ${editor.isActive('heading', { level: 1 }) ? 'active' : ''}`}
               onClick={() => handleToolbarButtonTouch(() => editor.chain().focus().toggleHeading({ level: 1 }).run())}
               aria-label="Titolo 1"
             >
@@ -789,7 +741,7 @@ const Editor = ({ onContentChange, initialContent }) => {
             
             <Button
               variant="link"
-              className={`mobile-toolbar-btn ${editor && editor.isActive('heading', { level: 2 }) ? 'active' : ''}`}
+              className={`mobile-toolbar-btn ${editor.isActive('heading', { level: 2 }) ? 'active' : ''}`}
               onClick={() => handleToolbarButtonTouch(() => editor.chain().focus().toggleHeading({ level: 2 }).run())}
               aria-label="Titolo 2"
             >
@@ -798,7 +750,7 @@ const Editor = ({ onContentChange, initialContent }) => {
             
             <Button
               variant="link"
-              className={`mobile-toolbar-btn ${editor && editor.isActive('heading', { level: 3 }) ? 'active' : ''}`}
+              className={`mobile-toolbar-btn ${editor.isActive('heading', { level: 3 }) ? 'active' : ''}`}
               onClick={() => handleToolbarButtonTouch(() => editor.chain().focus().toggleHeading({ level: 3 }).run())}
               aria-label="Titolo 3"
             >
@@ -808,7 +760,7 @@ const Editor = ({ onContentChange, initialContent }) => {
             {/* Gruppo per le liste */}
             <Button
               variant="link"
-              className={`mobile-toolbar-btn ${editor && editor.isActive('bulletList') ? 'active' : ''}`}
+              className={`mobile-toolbar-btn ${editor.isActive('bulletList') ? 'active' : ''}`}
               onClick={() => handleToolbarButtonTouch(() => editor.chain().focus().toggleBulletList().run())}
               aria-label="Elenco puntato"
             >
@@ -817,7 +769,7 @@ const Editor = ({ onContentChange, initialContent }) => {
             
             <Button
               variant="link"
-              className={`mobile-toolbar-btn ${editor && editor.isActive('orderedList') ? 'active' : ''}`}
+              className={`mobile-toolbar-btn ${editor.isActive('orderedList') ? 'active' : ''}`}
               onClick={() => handleToolbarButtonTouch(() => editor.chain().focus().toggleOrderedList().run())}
                 aria-label="Elenco numerato"
               >
@@ -838,7 +790,7 @@ const Editor = ({ onContentChange, initialContent }) => {
             {/* Pulsante per i link */}
             <Button
               variant="link"
-              className={`mobile-toolbar-btn ${editor && editor.isActive('link') ? 'active' : ''}`}
+              className={`mobile-toolbar-btn ${editor.isActive('link') ? 'active' : ''}`}
               onClick={() => handleToolbarButtonTouch(handleSetLink)}
               aria-label="Inserisci link"
             >
@@ -868,64 +820,30 @@ const Editor = ({ onContentChange, initialContent }) => {
         </div>
       </div>
     );
-  };
+  }, [editor, showMobileFontSizeTool, handleSetLink, insertDrawing, insertDocument]);
   
-  // Modifica la funzione handleInput per rimuovere qualsiasi apertura automatica di modali
+  // Modifica la funzione handleInput in useEffect per evitare duplicazioni
   useEffect(() => {
     if (!editor || !isMobileDevice) return;
     
-    const handleInput = () => {
-      console.log("📝 Editor input/update rilevato");
-      
-      // Log per debugging
-      setHasInteracted(true);
-      setIsEditorFocused(true);
-      localStorage.setItem('editorHasInteracted', 'true');
+    // Ora questa funzione si focalizza solo sugli aspetti dell'interazione utente
+    const handleMobileInteraction = () => {
+      setHasInteracted(true)
+      setIsEditorFocused(true)
+      localStorage.setItem('editorHasInteracted', 'true')
     };
     
-    const handleSelectionChange = () => {
-      console.log("🔍 Editor selection change rilevato");
+    // Definisco un handler di selezione specifico per mobile
+    const handleMobileSelectionChange = () => {
+      console.log("🔍 Editor selection change rilevato")
     };
     
-    editor.on('update', handleInput);
-    editor.on('selectionUpdate', handleSelectionChange);
+    editor.on('update', handleMobileInteraction)
+    editor.on('selectionUpdate', handleMobileSelectionChange)
     
     return () => {
-      editor.off('update', handleInput);
-      editor.off('selectionUpdate', handleSelectionChange);
-    };
-  }, [editor, isMobileDevice]);
-
-  // Modifica anche questo effetto per gestire i tap sull'editor
-  useEffect(() => {
-    if (!isMobileDevice || !editor) return;
-    
-    const editorElement = editor.view.dom;
-    
-    // Funzione per gestire il tap sull'editor
-    const handleTap = (e) => {
-      // Verifica che il tap sia sull'editor e NON sui pulsanti della toolbar
-      if (e.target.closest('.ProseMirror') && 
-          !e.target.closest('.mobile-toolbar-btn') && 
-          !e.target.closest('.mobile-font-size-tool') && 
-          !e.target.closest('.mobile-color-picker')) {
-        
-        setIsEditorFocused(true);
-        setHasInteracted(true);
-        localStorage.setItem('editorHasInteracted', 'true');
-        
-        // Importante: NON aprire modali qui!
-      }
-    };
-    
-    // Aggiungi i listener
-    document.addEventListener('touchend', handleTap);
-    document.addEventListener('click', handleTap);
-    
-    // Cleanup
-    return () => {
-      document.removeEventListener('touchend', handleTap);
-      document.removeEventListener('click', handleTap);
+      editor.off('update', handleMobileInteraction)
+      editor.off('selectionUpdate', handleMobileSelectionChange)
     };
   }, [editor, isMobileDevice]);
   
@@ -1266,18 +1184,23 @@ const Editor = ({ onContentChange, initialContent }) => {
     };
   }, [editor, isMobileDevice]);
 
-  // Aggiungi la funzione per inserire un blocco di disegno
-  const insertDrawing = () => {
-    editor.chain().focus().insertDrawing({
-      width: '100%',
-      height: '300px',
-      strokes: [],
-      id: 'drawing-' + Date.now() + '-' + Math.floor(Math.random() * 1000)
-    }).run();
+  // Sposta la dichiarazione di insertDrawing prima del suo utilizzo (intorno alla linea 823)
+  const insertDrawing = (dataUrl) => {
+    // implementazione della funzione
+    // ... existing code ...
+  };
+
+  // Ora puoi usare insertDrawing qui
+  const handleMobileInteraction = () => {
+    // ... existing code ...
+    // Rimuovi o correggi la linea che fa riferimento a insertDrawing
+    // ... existing code ...
   };
 
   // Migliora la funzione insertDocument per gestire correttamente i PDF
-  const insertDocument = () => {
+  const insertDocument = useCallback(() => {
+    if (!editor) return;
+    
     const input = document.createElement('input');
     input.type = 'file';
     input.multiple = true; // Consente la selezione di più file
@@ -1298,10 +1221,12 @@ const Editor = ({ onContentChange, initialContent }) => {
       processFiles();
     };
     input.click();
-  };
+  }, [editor]);
 
   // Funzione per processare e inserire un singolo file
-  const processAndInsertFile = (file) => {
+  const processAndInsertFile = useCallback((file) => {
+    if (!editor) return Promise.resolve();
+    
     return new Promise((resolve) => {
       const reader = new FileReader();
       const fileName = file.name;
@@ -1335,7 +1260,7 @@ const Editor = ({ onContentChange, initialContent }) => {
         resolve();
       };
     });
-  };
+  }, [editor]);
 
   // Migliora la gestione del drag and drop
   const handleEditorDrop = (e) => {
@@ -1363,9 +1288,122 @@ const Editor = ({ onContentChange, initialContent }) => {
     processFiles();
   };
 
+  // Aggiorna la gestione del contenuto
+  useEffect(() => {
+    // Carica il contenuto iniziale se disponibile
+    if (initialContent && editor) {
+      editor.commands.setContent(initialContent);
+    }
+    
+    // Configura il salvataggio automatico ogni 2 minuti
+    const saveInterval = setInterval(() => {
+      if (editor) {
+        const content = editor.getHTML();
+        onContentChange(content);
+        console.log('Contenuto editor salvato automaticamente');
+      }
+    }, 120000); // 2 minuti
+    
+    return () => {
+      clearInterval(saveInterval);
+    };
+  }, [editor, initialContent, onContentChange]);
+
+  // Funzione di salvataggio con buffer e retry
+  const saveContent = async (content, force = false) => {
+    // Aggiorna il buffer con il contenuto più recente
+    setSaveBuffer(content);
+    setSaveState(prev => ({ ...prev, pendingChanges: true }));
+    
+    // Se c'è già un salvataggio in corso, non fare nulla (il buffer contiene già l'ultimo contenuto)
+    if (saveState.saveInProgress && !force) {
+      return;
+    }
+    
+    // Se il tempo dall'ultimo salvataggio è troppo breve e non è forzato, aspetta
+    if (!force && saveState.lastSaved) {
+      const timeSinceLastSave = Date.now() - saveState.lastSaved;
+      if (timeSinceLastSave < 5000) { // Minimo 5 secondi tra i salvataggi consecutivi
+        return;
+      }
+    }
+    
+    // Inizia il processo di salvataggio
+    setSaveState(prev => ({ ...prev, saveInProgress: true }));
+    
+    try {
+      // Recupera il contenuto attuale dal buffer
+      const contentToSave = saveBuffer;
+      
+      // Effettua la richiesta di salvataggio
+      await api.post('/api/notes/save', {
+        id: currentNote.id, 
+        content: contentToSave
+      });
+      
+      // Aggiorna lo stato dopo il salvataggio riuscito
+      setSaveState({
+        lastSaved: Date.now(),
+        saveInProgress: false,
+        pendingChanges: false,
+        retryCount: 0
+      });
+      
+      // Mostra notifica solo se è un salvataggio forzato (manuale)
+      if (force) {
+        toast.success('Contenuto salvato con successo');
+      }
+    } catch (error) {
+      console.error('Errore durante il salvataggio:', error);
+      
+      // Incrementa il contatore di tentativi
+      const newRetryCount = saveState.retryCount + 1;
+      
+      // Aggiorna lo stato
+      setSaveState(prev => ({
+        ...prev, 
+        saveInProgress: false,
+        retryCount: newRetryCount
+      }));
+      
+      // Se era un salvataggio manuale, mostra un errore
+      if (force) {
+        toast.error('Errore durante il salvataggio. Riproveremo automaticamente.');
+      }
+      
+      // Calcola il ritardo per il prossimo tentativo (backoff esponenziale)
+      const retryDelay = Math.min(30000, 2000 * Math.pow(2, newRetryCount));
+      
+      // Pianifica un nuovo tentativo
+      setTimeout(() => saveContent(saveBuffer, true), retryDelay);
+    }
+  };
+
+  // Configura il salvataggio automatico periodico
+  useEffect(() => {
+    // Verifica ogni 30 secondi se ci sono modifiche in attesa
+    const checkInterval = setInterval(() => {
+      if (saveState.pendingChanges && !saveState.saveInProgress) {
+        saveContent(saveBuffer, false);
+      }
+    }, 30000);
+    
+    // Ogni 2 minuti, forza un salvataggio se ci sono modifiche
+    const saveInterval = setInterval(() => {
+      if (saveBuffer && saveState.pendingChanges) {
+        saveContent(saveBuffer, true);
+      }
+    }, 120000);
+    
+    return () => {
+      clearInterval(checkInterval);
+      clearInterval(saveInterval);
+    };
+  }, [saveBuffer, saveState]);
+
   return (
     <div className={`editor-container d-flex flex-column h-100 ${isMobileDevice ? 'mobile-mode' : ''} ${isKeyboardVisible ? 'keyboard-visible' : ''}`}>
-      {!isMobileDevice && (
+      {!isMobileDevice && editor && (
         <div className="editor-toolbar">
           <ButtonToolbar className="d-flex gap-3" style={{ flexWrap: 'nowrap' }}>
             {/* Gruppo per la formattazione del testo */}
@@ -1602,35 +1640,35 @@ const Editor = ({ onContentChange, initialContent }) => {
       )}
       
       <div className="editor-content-container flex-grow-1 overflow-hidden position-relative">
-        {isMobileDevice && <MobileToolbar />}
+        {isMobileDevice && editor && <MobileToolbar />}
         <EditorContent editor={editor} className="editor-content h-100" />
         
         {/* Opzioni di formattazione mobile */}
         {isMobileDevice && showMobileOptions && (
           <div className="mobile-format-options">
             <div className="mobile-format-option" onClick={() => {
-              editor.chain().focus().toggleHeading({ level: 1 }).run();
+              editor && editor.chain().focus().toggleHeading({ level: 1 }).run();
               setShowMobileOptions(false);
             }}>
               <span className="option-icon">H1</span>
               <span className="option-label">Titolo grande</span>
             </div>
             <div className="mobile-format-option" onClick={() => {
-              editor.chain().focus().toggleHeading({ level: 2 }).run();
+              editor && editor.chain().focus().toggleHeading({ level: 2 }).run();
               setShowMobileOptions(false);
             }}>
               <span className="option-icon">H2</span>
               <span className="option-label">Titolo medio</span>
             </div>
             <div className="mobile-format-option" onClick={() => {
-              editor.chain().focus().toggleBulletList().run();
+              editor && editor.chain().focus().toggleBulletList().run();
               setShowMobileOptions(false);
             }}>
               <span className="option-icon">•</span>
               <span className="option-label">Elenco puntato</span>
             </div>
             <div className="mobile-format-option" onClick={() => {
-              editor.chain().focus().toggleOrderedList().run();
+              editor && editor.chain().focus().toggleOrderedList().run();
               setShowMobileOptions(false);
             }}>
               <span className="option-icon">1.</span>

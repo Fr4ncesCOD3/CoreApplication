@@ -1,342 +1,401 @@
-import { useState } from 'react'
-import { FiSave, FiTrash2, FiShare2, FiTag, FiDownload, FiUpload, FiPlus } from 'react-icons/fi'
-import { Form, Button, Modal, InputGroup } from 'react-bootstrap'
-import { jsPDF } from 'jspdf'
-import { marked } from 'marked'
+import React, { useState, useRef, useEffect } from 'react'
+import { Container, Row, Col, Button, Form, Dropdown } from 'react-bootstrap'
+import { FiMenu, FiSave, FiTrash2, FiDownload, FiTag, FiX, FiCheck, FiPlus } from 'react-icons/fi'
 import './Toolbar.css'
+import { toast } from '../../../utils/notification'
 
-const Toolbar = ({ note, updateNote, deleteNote, addTag, removeTag, createNote }) => {
-  const [showTagInput, setShowTagInput] = useState(false)
-  const [newTag, setNewTag] = useState('')
-  const [showShareModal, setShowShareModal] = useState(false)
+const Toolbar = ({ 
+  note, 
+  updateNote, 
+  deleteNote, 
+  addTag, 
+  removeTag, 
+  createNote, 
+  onSave,
+  toggleSidebar,
+  lastSyncTime,
+  isOffline,
+  contentChanged = false
+}) => {
+  const [title, setTitle] = useState('')
+  const [tags, setTags] = useState([])
+  const [tagInput, setTagInput] = useState('')
+  const [showAddTag, setShowAddTag] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const tagInputRef = useRef(null)
+  
+  useEffect(() => {
+    if (note) {
+      setTitle(note.title || '')
+      setTags(note.tags || [])
+    }
+  }, [note])
+  
+  // Focus sul campo di input tag quando viene mostrato
+  useEffect(() => {
+    if (showAddTag && tagInputRef.current) {
+      tagInputRef.current.focus()
+    }
+  }, [showAddTag])
   
   const handleTitleChange = (e) => {
-    updateNote(note.id, { title: e.target.value })
+    const newTitle = e.target.value
+    setTitle(newTitle)
   }
   
-  const handleAddTag = () => {
-    if (newTag.trim()) {
-      addTag(note.id, newTag.trim())
-      setNewTag('')
-      setShowTagInput(false)
+  const handleTitleBlur = () => {
+    if (note && title !== note.title) {
+      updateNote(note.id, { title })
     }
   }
   
-  const handleKeyDown = (e) => {
+  const handleTitleKeyDown = (e) => {
     if (e.key === 'Enter') {
-      handleAddTag()
+      e.preventDefault()
+      e.target.blur()
     }
   }
   
-  const handleExportMarkdown = () => {
-    // Converti il contenuto HTML in Markdown
-    const tempElement = document.createElement('div')
-    tempElement.innerHTML = note.content
+  const handleSaveNote = async () => {
+    if (!note) return
     
-    // Crea un blob e un link per il download
-    const blob = new Blob([tempElement.textContent], { type: 'text/markdown' })
+    setLoading(true)
+    try {
+      await onSave()
+      toast.success('Nota salvata con successo')
+    } catch (error) {
+      toast.error('Errore durante il salvataggio della nota')
+    } finally {
+      setLoading(false)
+    }
+  }
+  
+  const handleDeleteNote = async () => {
+    if (!note) return
+    
+    try {
+      const confirmed = await deleteNote(note.id)
+      if (confirmed) {
+        toast.success('Nota eliminata con successo')
+      }
+    } catch (error) {
+      toast.error('Errore durante l\'eliminazione della nota')
+    }
+  }
+  
+  const handleTagSubmit = (e) => {
+    e.preventDefault()
+    
+    if (tagInput.trim() && note) {
+      addTag(note.id, tagInput.trim())
+      setTagInput('')
+      setShowAddTag(false)
+    }
+  }
+  
+  const handleRemoveTag = (tag) => {
+    if (note) {
+      removeTag(note.id, tag)
+    }
+  }
+  
+  const formatTimestamp = (timestamp) => {
+    if (!timestamp) return ''
+    
+    const date = new Date(timestamp)
+    return date.toLocaleString('it-IT', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  }
+  
+  const exportNoteAsText = () => {
+    if (!note) return
+    
+    const content = note.content || ''
+    const textContent = content // Estrai il testo dal contenuto JSON o HTML
+    
+    const blob = new Blob([textContent], { type: 'text/plain' })
     const url = URL.createObjectURL(blob)
+    
     const a = document.createElement('a')
     a.href = url
-    a.download = `${note.title}.md`
+    a.download = `${note.title || 'Nota'}.txt`
     document.body.appendChild(a)
     a.click()
-    document.body.removeChild(a)
-    URL.revokeObjectURL(url)
+    
+    // Pulizia
+    setTimeout(() => {
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    }, 100)
   }
   
-  const handleExportPDF = () => {
-    const doc = new jsPDF()
+  const shareNote = () => {
+    if (!note) return;
     
-    // Converti il contenuto HTML in testo semplice per il PDF
-    const tempElement = document.createElement('div')
-    tempElement.innerHTML = note.content
+    // Crea un URL per la condivisione diretta
+    const shareUrl = `${window.location.origin}/note/${note.id}`;
     
-    doc.text(note.title, 20, 20)
-    doc.text(tempElement.textContent, 20, 30)
-    doc.save(`${note.title}.pdf`)
-  }
-  
-  const handleImport = (e) => {
-    const file = e.target.files[0]
-    if (!file) return
-    
-    const reader = new FileReader()
-    reader.onload = (event) => {
-      const content = event.target.result
-      
-      // Crea una nuova nota con il contenuto importato
-      const newNote = createNote(note.parent)
-      
-      // Aggiorna il titolo e il contenuto
-      const fileName = file.name.replace(/\.[^/.]+$/, "") // Rimuovi l'estensione
-      updateNote(newNote.id, { 
-        title: fileName,
-        content: `<p>${content}</p>` // Converti in HTML semplice
+    // Prova a usare l'API di condivisione nativa se disponibile
+    if (navigator.share) {
+      navigator.share({
+        title: note.title || 'Nota condivisa',
+        text: 'Dai un\'occhiata a questa nota',
+        url: shareUrl,
       })
+      .catch((error) => {
+        console.error('Errore nella condivisione:', error);
+        // Fallback: copia negli appunti
+        copyToClipboard(shareUrl);
+      });
+    } else {
+      // Se l'API Share non è disponibile, copia l'URL negli appunti
+      copyToClipboard(shareUrl);
     }
-    
-    reader.readAsText(file)
-  }
+  };
   
-  const handleShare = () => {
-    setShowShareModal(true)
-  }
-  
-  const generateShareLink = () => {
-    // In un'applicazione reale, questo genererebbe un link condivisibile
-    // Per ora, creiamo un link fittizio
-    return `${window.location.origin}/shared/${note.id}`
-  }
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text)
+      .then(() => {
+        toast.success('Link copiato negli appunti');
+      })
+      .catch((err) => {
+        console.error('Errore nella copia:', err);
+        toast.error('Impossibile copiare il link');
+      });
+  };
   
   return (
     <div className="toolbar">
-      <div className="container-fluid">
-        <div className="toolbar-row">
-          <div className="toolbar-left">
+      <Container fluid>
+        <Row className="toolbar-row">
+          <Col xs="auto" className="toolbar-left d-flex align-items-center">
+            <Button 
+              variant="link" 
+              className="toolbar-btn menu-btn d-md-none"
+              onClick={toggleSidebar}
+            >
+              <FiMenu />
+            </Button>
+            
             <Form.Control
               type="text"
-              value={note.title}
+              className="note-title-input"
+              placeholder="Titolo nota..."
+              value={title}
               onChange={handleTitleChange}
-              className="note-title-input border-0 bg-transparent fw-bold"
-              placeholder="Titolo della nota"
+              onBlur={handleTitleBlur}
+              onKeyDown={handleTitleKeyDown}
             />
-            
-            <div className="tags-container">
-              {note.tags && note.tags.map(tag => (
-                <div key={tag} className="tag">
-                  <span>{tag}</span>
-                  <Button 
-                    variant="link"
-                    className="remove-tag-btn"
-                    onClick={() => removeTag(note.id, tag)}
-                    aria-label="Rimuovi tag"
-                  >
-                    &times;
-                  </Button>
-                </div>
-              ))}
+          </Col>
+          
+          <Col xs="auto" className="toolbar-right d-flex align-items-center">
+            <div className="toolbar-actions d-flex">
+              <Button 
+                variant="link" 
+                className={`toolbar-btn save-btn ${contentChanged ? 'unsaved' : ''}`} 
+                onClick={handleSaveNote}
+                disabled={loading || !note}
+                title="Salva nota"
+              >
+                <FiSave />
+                {contentChanged && <span className="unsaved-indicator"></span>}
+              </Button>
               
-              {showTagInput ? (
-                <div className="tag-input-container d-flex align-items-center flex-wrap">
-                  <Form.Control
-                    type="text"
-                    value={newTag}
-                    onChange={(e) => setNewTag(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder="Nuovo tag"
-                    autoFocus
-                    className="tag-input me-1 mb-1"
-                    size="sm"
-                  />
-                  <div className="d-flex mt-1 mt-sm-0">
-                    <Button 
-                      variant="outline-primary" 
-                      size="sm" 
-                      onClick={handleAddTag}
-                      className="me-1"
+              <Button 
+                variant="link" 
+                className="toolbar-btn share-btn" 
+                onClick={shareNote}
+                disabled={!note}
+                title="Condividi nota"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="18" cy="5" r="3"></circle>
+                  <circle cx="6" cy="12" r="3"></circle>
+                  <circle cx="18" cy="19" r="3"></circle>
+                  <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                  <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+                </svg>
+              </Button>
+              
+              <Button 
+                variant="link" 
+                className="toolbar-btn delete-btn" 
+                onClick={handleDeleteNote}
+                disabled={!note}
+                title="Elimina nota"
+              >
+                <FiTrash2 />
+              </Button>
+              
+              <Dropdown className="export-dropdown">
+                <Dropdown.Toggle as={Button} variant="link" className="toolbar-btn">
+                  <FiDownload />
+                </Dropdown.Toggle>
+                
+                <Dropdown.Menu>
+                  <Dropdown.Item onClick={exportNoteAsText}>Esporta come TXT</Dropdown.Item>
+                  <Dropdown.Item onClick={() => exportNoteAsHtml()}>Esporta come HTML</Dropdown.Item>
+                  <Dropdown.Item onClick={() => exportNoteAsPdf()}>Esporta come PDF</Dropdown.Item>
+                </Dropdown.Menu>
+              </Dropdown>
+              
+              <Button 
+                variant="link" 
+                className="toolbar-btn" 
+                onClick={() => setShowAddTag(!showAddTag)}
+                disabled={!note}
+                title="Gestisci tag"
+              >
+                <FiTag />
+              </Button>
+            </div>
+            
+            {note && (
+              <div className="tags-container d-flex align-items-center flex-wrap">
+                {tags.map(tag => (
+                  <div key={tag} className="tag">
+                    {tag}
+                    <button
+                      className="remove-tag-btn"
+                      onClick={() => handleRemoveTag(tag)}
+                      aria-label={`Rimuovi tag ${tag}`}
                     >
-                      Aggiungi
-                    </Button>
-                    <Button 
-                      variant="outline-secondary" 
-                      size="sm" 
-                      onClick={() => setShowTagInput(false)}
-                    >
-                      Annulla
-                    </Button>
+                      <FiX />
+                    </button>
                   </div>
-                </div>
-              ) : (
-                <Button 
-                  variant="dark"
-                  className="toolbar-btn p-1 d-flex align-items-center justify-content-center"
-                  onClick={() => setShowTagInput(true)}
-                  title="Aggiungi tag"
-                >
-                  <FiTag />
-                </Button>
-              )}
-            </div>
-          </div>
-          
-          <div className="toolbar-right d-none d-md-flex">
-            <Button 
-              variant="dark"
-              className="toolbar-btn p-1 d-flex align-items-center justify-content-center"
-              onClick={() => createNote(note.id)}
-              title="Crea sotto-nota"
-            >
-              <FiPlus />
-            </Button>
-            
-            <Button 
-              variant="dark"
-              className="toolbar-btn p-1 d-flex align-items-center justify-content-center"
-              onClick={handleShare}
-              title="Condividi"
-            >
-              <FiShare2 />
-            </Button>
-            
-            <div className="export-dropdown">
-              <Button 
-                variant="dark"
-                className="toolbar-btn p-1 d-flex align-items-center justify-content-center"
-                title="Esporta"
-              >
-                <FiDownload />
-              </Button>
-              <div className="export-dropdown-content">
-                <Button 
-                  variant="link" 
-                  className="w-100 text-start"
-                  onClick={handleExportMarkdown}
-                >
-                  Esporta come Markdown
-                </Button>
-                <Button 
-                  variant="link" 
-                  className="w-100 text-start"
-                  onClick={handleExportPDF}
-                >
-                  Esporta come PDF
-                </Button>
+                ))}
+                
+                {showAddTag && (
+                  <Form onSubmit={handleTagSubmit} className="d-flex">
+                    <Form.Control
+                      ref={tagInputRef}
+                      type="text"
+                      className="tag-input"
+                      placeholder="Nuovo tag..."
+                      value={tagInput}
+                      onChange={(e) => setTagInput(e.target.value)}
+                      onBlur={() => setShowAddTag(false)}
+                    />
+                    <Button variant="link" className="toolbar-btn" type="submit">
+                      <FiCheck />
+                    </Button>
+                  </Form>
+                )}
+                
+                {!showAddTag && tags.length === 0 && (
+                  <Button 
+                    variant="link" 
+                    className="add-tag-btn" 
+                    onClick={() => setShowAddTag(true)}
+                  >
+                    <FiPlus /> Aggiungi tag
+                  </Button>
+                )}
               </div>
-            </div>
+            )}
             
-            <div className="import-container">
-              <label htmlFor="file-import" className="toolbar-btn btn btn-light p-1 m-0 d-flex align-items-center justify-content-center" title="Importa">
-                <FiUpload />
-              </label>
-              <input
-                id="file-import"
-                type="file"
-                accept=".md,.txt"
-                onChange={handleImport}
-                style={{ display: 'none' }}
-              />
-            </div>
-            
-            <Button 
-              variant="dark"
-              className="toolbar-btn delete-btn p-1 d-flex align-items-center justify-content-center"
-              onClick={() => {
-                if (window.confirm('Sei sicuro di voler eliminare questa nota? Questa azione non può essere annullata.')) {
-                  deleteNote(note.id)
-                }
-              }}
-              title="Elimina"
-            >
-              <FiTrash2 />
-            </Button>
-          </div>
-          
-          <div className="toolbar-buttons-container d-flex d-md-none">
-            <Button 
-              variant="dark"
-              className="toolbar-btn p-1 d-flex align-items-center justify-content-center"
-              onClick={() => createNote(note.id)}
-              title="Crea sotto-nota"
-            >
-              <FiPlus />
-            </Button>
-            
-            <Button 
-              variant="dark"
-              className="toolbar-btn p-1 d-flex align-items-center justify-content-center"
-              onClick={handleShare}
-              title="Condividi"
-            >
-              <FiShare2 />
-            </Button>
-            
-            <div className="export-dropdown">
-              <Button 
-                variant="dark"
-                className="toolbar-btn p-1 d-flex align-items-center justify-content-center"
-                title="Esporta"
-              >
-                <FiDownload />
-              </Button>
-              <div className="export-dropdown-content">
-                <Button 
-                  variant="link" 
-                  className="w-100 text-start"
-                  onClick={handleExportMarkdown}
-                >
-                  Esporta come Markdown
-                </Button>
-                <Button 
-                  variant="link" 
-                  className="w-100 text-start"
-                  onClick={handleExportPDF}
-                >
-                  Esporta come PDF
-                </Button>
+            {lastSyncTime && (
+              <div className="sync-info ms-2">
+                <small className={`text-muted ${contentChanged ? 'text-warning' : ''}`}>
+                  {isOffline ? '🔴 Offline' : (contentChanged ? '🟠 Modificato' : '🟢 Salvato')}
+                  {!contentChanged && <span className="ms-1">{formatTimestamp(lastSyncTime)}</span>}
+                </small>
               </div>
-            </div>
-            
-            <div className="import-container">
-              <label htmlFor="file-import-mobile" className="toolbar-btn btn btn-light p-1 m-0 d-flex align-items-center justify-content-center" title="Importa">
-                <FiUpload />
-              </label>
-              <input
-                id="file-import-mobile"
-                type="file"
-                accept=".md,.txt"
-                onChange={handleImport}
-                style={{ display: 'none' }}
-              />
-            </div>
-            
-            <Button 
-              variant="dark"
-              className="toolbar-btn delete-btn p-1 d-flex align-items-center justify-content-center"
-              onClick={() => {
-                if (window.confirm('Sei sicuro di voler eliminare questa nota? Questa azione non può essere annullata.')) {
-                  deleteNote(note.id)
-                }
-              }}
-              title="Elimina"
-            >
-              <FiTrash2 />
-            </Button>
-          </div>
-        </div>
-      </div>
-      
-      <Modal show={showShareModal} onHide={() => setShowShareModal(false)}>
-        <Modal.Header closeButton>
-          <Modal.Title>Condividi Nota</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          <p>Usa questo link per condividere la tua nota:</p>
-          <InputGroup className="mb-3">
-            <Form.Control
-              type="text"
-              value={generateShareLink()}
-              readOnly
-            />
-            <Button
-              variant="primary"
-              onClick={() => {
-                navigator.clipboard.writeText(generateShareLink())
-                alert('Link copiato negli appunti!')
-              }}
-            >
-              Copia
-            </Button>
-          </InputGroup>
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => setShowShareModal(false)}>
-            Chiudi
-          </Button>
-        </Modal.Footer>
-      </Modal>
+            )}
+          </Col>
+        </Row>
+      </Container>
     </div>
   )
 }
+
+const exportNoteAsHtml = () => {
+  if (!note || !note.content) return;
+  
+  // Crea un documento HTML completo
+  const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>${note.title || 'Nota esportata'}</title>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; padding: 20px; }
+        h1, h2, h3 { margin-top: 20px; }
+        pre { background: #f4f4f4; padding: 10px; border-radius: 5px; }
+      </style>
+    </head>
+    <body>
+      <h1>${note.title || 'Nota esportata'}</h1>
+      ${note.content}
+    </body>
+    </html>
+  `;
+  
+  const blob = new Blob([htmlContent], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${note.title || 'Nota'}.html`;
+  document.body.appendChild(a);
+  a.click();
+  
+  // Pulizia
+  setTimeout(() => {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, 100);
+};
+
+const exportNoteAsPdf = () => {
+  if (!note) return;
+  
+  toast.info('Preparazione PDF in corso...');
+  
+  // Questo è un approccio semplificato - in produzione potresti voler usare una libreria PDF
+  // o un servizio backend per la conversione
+  
+  const printWindow = window.open('', '_blank');
+  
+  if (!printWindow) {
+    toast.error('Il blocco dei popup ha impedito la generazione del PDF');
+    return;
+  }
+  
+  printWindow.document.write(`
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <title>${note.title || 'Nota esportata'}</title>
+      <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        @media print {
+          body { margin: 0; padding: 15mm; }
+        }
+      </style>
+    </head>
+    <body>
+      <h1>${note.title || 'Nota esportata'}</h1>
+      ${note.content || ''}
+      <script>
+        window.onload = function() {
+          setTimeout(function() {
+            window.print();
+            window.close();
+          }, 500);
+        }
+      </script>
+    </body>
+    </html>
+  `);
+  
+  printWindow.document.close();
+};
 
 export default Toolbar
