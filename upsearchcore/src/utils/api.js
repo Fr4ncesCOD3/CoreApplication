@@ -326,20 +326,120 @@ export const authService = {
 export const noteApi = {
   getNotes: async () => {
     try {
-      const response = await api.get('/api/notes');
-      return response.data;
+      const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+      const userId = currentUser?.id;
+      
+      if (!userId) {
+        console.warn('Nessun utente autenticato, impossibile ottenere le note');
+        return [];
+      }
+      
+      // Usa l'endpoint standard con parametro query invece dell'endpoint specifico utente
+      // che non esiste sul backend
+      const response = await api.get('/api/notes', {
+        params: { userId: userId }
+      });
+      
+      if (response && response.data) {
+        // Doppio filtro di sicurezza lato client
+        const filteredNotes = response.data.filter(note => 
+          !note.userId || note.userId === userId || note.isTutorial === true
+        );
+        
+        console.log(`Note filtrate per utente ${userId}: ${filteredNotes.length}`);
+        return filteredNotes;
+      }
+      
+      return [];
     } catch (error) {
-      console.error('Errore nel recupero delle note:', error);
+      console.error('Errore nell\'ottenere le note:', error);
       throw error;
     }
   },
   
   createNote: async (noteData) => {
     try {
-      const response = await api.post('/api/notes', noteData);
-      return response.data;
+      // Per la creazione iniziale, limitiamo il contenuto
+      const initialData = {
+        ...noteData,
+        // Se il contenuto è troppo lungo, usiamo una versione troncata
+        content: noteData.content && noteData.content.length > 200 ? 
+          noteData.content.substring(0, 200) + '...' : noteData.content
+      };
+      
+      console.log("Creazione nota con contenuto iniziale...");
+      const response = await api.post('/api/notes', initialData);
+      const createdNote = response.data;
+      
+      // Se il contenuto è stato troncato e la creazione è andata a buon fine, aggiorniamo il contenuto completo
+      if (noteData.content && noteData.content.length > 200 && createdNote && createdNote.id) {
+        console.log("Aggiornamento con contenuto completo per la nota:", createdNote.id);
+        try {
+          // Suddividiamo il contenuto in chunk più piccoli se necessario
+          const contentLength = noteData.content.length;
+          const chunkSize = 100000; // Dimensione sicura per un singolo aggiornamento
+          
+          if (contentLength > chunkSize) {
+            // Se il contenuto è molto grande, lo invieremo in parti
+            console.log("Contenuto molto grande, suddivisione in parti...");
+            let finalContent = '';
+            
+            for (let i = 0; i < contentLength; i += chunkSize) {
+              const chunk = noteData.content.substring(i, Math.min(i + chunkSize, contentLength));
+              finalContent += chunk;
+              
+              // Aggiorniamo progressivamente il contenuto
+              await api.put(`/api/notes/${createdNote.id}`, {
+                content: finalContent
+              });
+            }
+          } else {
+            // Aggiornamento normale per contenuti di dimensioni gestibili
+            await api.put(`/api/notes/${createdNote.id}`, {
+              content: noteData.content
+            });
+          }
+          
+          // Recuperiamo la nota aggiornata
+          const getResponse = await api.get(`/api/notes/${createdNote.id}`);
+          return getResponse.data;
+        } catch (updateError) {
+          console.error('Errore nell\'aggiornamento del contenuto completo:', updateError);
+          return createdNote; // Restituisci comunque la nota creata
+        }
+      }
+      
+      return createdNote;
     } catch (error) {
       console.error('Errore nella creazione della nota:', error);
+      
+      // Strategia di fallback in caso di errore
+      if (error.response && (error.response.status === 500 || error.response.status === 413)) {
+        console.log("Tentativo di creazione con contenuto ridotto...");
+        try {
+          // Creiamo la nota con contenuto minimo
+          const minimalData = {
+            ...noteData,
+            content: 'Caricamento contenuto in corso...' // Contenuto minimo
+          };
+          const fallbackResponse = await api.post('/api/notes', minimalData);
+          const noteId = fallbackResponse.data.id;
+          
+          // Aggiorniamo gradualmente il contenuto
+          console.log("Aggiornamento graduale del contenuto...");
+          await api.put(`/api/notes/${noteId}`, { 
+            content: noteData.content.substring(0, Math.min(50000, noteData.content.length)) 
+          });
+          
+          // Recupera la nota completa
+          const getResponse = await api.get(`/api/notes/${noteId}`);
+          return getResponse.data;
+        } catch (fallbackError) {
+          console.error('Errore anche con il fallback:', fallbackError);
+          throw fallbackError;
+        }
+      }
+      
       throw error;
     }
   },
@@ -461,7 +561,7 @@ const getNotes = async () => {
     
     console.log(`Tentativo di caricamento note per utente: ${user.id}`);
     
-    // Fai SEMPRE una richiesta al server come prima opzione
+    // Modifica: usa il parametro di query invece del path parameter
     try {
       const response = await api.get('/api/notes', { 
         params: { userId: user.id },
@@ -501,35 +601,90 @@ const getNotes = async () => {
 // Assicuriamoci di esporre questa funzione
 export { getNotes };
 
-// Miglioramento della funzione createNote per garantire la creazione online
+// Ottimizzazione della funzione createNote per gestire contenuti più lunghi
 const createNote = async (noteData) => {
   try {
-    toast.info('Creazione nota in corso...');
+    // Per la creazione iniziale, limitiamo il contenuto
+    const initialData = {
+      ...noteData,
+      // Se il contenuto è troppo lungo, usiamo una versione troncata
+      content: noteData.content && noteData.content.length > 200 ? 
+        noteData.content.substring(0, 200) + '...' : noteData.content
+    };
     
-    const response = await api.post('/api/notes', noteData, { 
-      timeout: 15000 
-    });
+    console.log("Creazione nota con contenuto iniziale...");
+    const response = await api.post('/api/notes', initialData);
+    const createdNote = response.data;
     
-    // Se la creazione online ha successo, aggiorna la cache
-    if (response.data) {
-      toast.success('Nota creata con successo');
-      
-      // Aggiorna la cache locale
-      const cachedNotes = getCachedNotes();
-      localStorage.setItem('cachedNotes', JSON.stringify([...cachedNotes, response.data]));
-      localStorage.setItem('noteCacheTimestamp', Date.now().toString());
+    // Se il contenuto è stato troncato e la creazione è andata a buon fine, aggiorniamo il contenuto completo
+    if (noteData.content && noteData.content.length > 200 && createdNote && createdNote.id) {
+      console.log("Aggiornamento con contenuto completo per la nota:", createdNote.id);
+      try {
+        // Suddividiamo il contenuto in chunk più piccoli se necessario
+        const contentLength = noteData.content.length;
+        const chunkSize = 100000; // Dimensione sicura per un singolo aggiornamento
+        
+        if (contentLength > chunkSize) {
+          // Se il contenuto è molto grande, lo invieremo in parti
+          console.log("Contenuto molto grande, suddivisione in parti...");
+          let finalContent = '';
+          
+          for (let i = 0; i < contentLength; i += chunkSize) {
+            const chunk = noteData.content.substring(i, Math.min(i + chunkSize, contentLength));
+            finalContent += chunk;
+            
+            // Aggiorniamo progressivamente il contenuto
+            await api.put(`/api/notes/${createdNote.id}`, {
+              content: finalContent
+            });
+          }
+        } else {
+          // Aggiornamento normale per contenuti di dimensioni gestibili
+          await api.put(`/api/notes/${createdNote.id}`, {
+            content: noteData.content
+          });
+        }
+        
+        // Recuperiamo la nota aggiornata
+        const getResponse = await api.get(`/api/notes/${createdNote.id}`);
+        return getResponse.data;
+      } catch (updateError) {
+        console.error('Errore nell\'aggiornamento del contenuto completo:', updateError);
+        return createdNote; // Restituisci comunque la nota creata
+      }
     }
     
-    return response.data;
+    return createdNote;
   } catch (error) {
     console.error('Errore nella creazione della nota:', error);
     
-    if (error.response && error.response.status === 429) {
-      toast.error('Troppe richieste. Riprova tra qualche secondo.');
-      throw new Error('Rate limit exceeded');
+    // Strategia di fallback in caso di errore
+    if (error.response && (error.response.status === 500 || error.response.status === 413)) {
+      console.log("Tentativo di creazione con contenuto ridotto...");
+      try {
+        // Creiamo la nota con contenuto minimo
+        const minimalData = {
+          ...noteData,
+          content: 'Caricamento contenuto in corso...' // Contenuto minimo
+        };
+        const fallbackResponse = await api.post('/api/notes', minimalData);
+        const noteId = fallbackResponse.data.id;
+        
+        // Aggiorniamo gradualmente il contenuto
+        console.log("Aggiornamento graduale del contenuto...");
+        await api.put(`/api/notes/${noteId}`, { 
+          content: noteData.content.substring(0, Math.min(50000, noteData.content.length)) 
+        });
+        
+        // Recupera la nota completa
+        const getResponse = await api.get(`/api/notes/${noteId}`);
+        return getResponse.data;
+      } catch (fallbackError) {
+        console.error('Errore anche con il fallback:', fallbackError);
+        throw fallbackError;
+      }
     }
     
-    toast.error('Errore nella creazione della nota. Verifica la connessione.');
     throw error;
   }
 };

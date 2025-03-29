@@ -94,13 +94,12 @@ const Notes = ({ notes, activeNoteId, onNoteSelect, onCreateNote }) => {
             >
               <div className="note-tree-item-content d-flex align-items-center">
                 {hasChildren ? (
-                  <Button 
-                    variant="link" 
+                  <span 
                     className="p-0 me-2 toggle-btn" 
                     onClick={(e) => toggleFolder(note.id, e)}
                   >
                     {isExpanded ? <FiChevronDown /> : <FiChevronRight />}
-                  </Button>
+                  </span>
                 ) : (
                   <FiFile className="note-icon me-2" />
                 )}
@@ -115,8 +114,7 @@ const Notes = ({ notes, activeNoteId, onNoteSelect, onCreateNote }) => {
                   )}
                 </div>
                 
-                <Button 
-                  variant="link"
+                <span 
                   className="create-child-note p-1 ms-auto"
                   onClick={(e) => {
                     e.stopPropagation();
@@ -125,7 +123,7 @@ const Notes = ({ notes, activeNoteId, onNoteSelect, onCreateNote }) => {
                   title="Crea sotto-nota"
                 >
                   <FiFolderPlus />
-                </Button>
+                </span>
               </div>
               
               {hasChildren && isExpanded && renderNoteTree(note.id, level + 1)}

@@ -72,6 +72,12 @@ const Notepad = ({ theme, toggleTheme }) => {
           
           // Verifica e crea le note tutorial se necessario
           await checkAndCreateTutorialNotes(loadedNotes);
+          
+          // Se ci sono note ma nessuna è attiva, imposta la prima come attiva
+          if (loadedNotes && loadedNotes.length > 0 && !activeNote) {
+            setActiveNote(loadedNotes[0]);
+            navigate(`/note/${loadedNotes[0].id}`);
+          }
         } catch (error) {
           console.error("Errore nel caricamento delle note:", error);
           
@@ -95,6 +101,15 @@ const Notepad = ({ theme, toggleTheme }) => {
               console.log("Note caricate dalla cache locale:", cachedNotes.length);
               setNotes(cachedNotes);
               setLastSyncTime(new Date(parseInt(localStorage.getItem('noteCacheTimestamp') || Date.now())));
+            } else {
+              // Se non ci sono note in cache, crea una nota tutorial locale
+              console.log("Nessuna nota disponibile, creazione di una nota tutorial locale");
+              const localTutorialNotes = createLocalTutorialNotes();
+              setNotes(localTutorialNotes);
+              
+              // Impostiamo la prima nota come attiva
+              setActiveNote(localTutorialNotes[0]);
+              navigate(`/note/${localTutorialNotes[0].id}`);
             }
           }
         }
@@ -179,82 +194,211 @@ const Notepad = ({ theme, toggleTheme }) => {
     return tutorialNotes.length >= 2;
   };
 
-  // Funzione per verificare e creare le note tutorial se necessario
+  // Modifica la funzione per verificare e creare le note tutorial se necessario
   const checkAndCreateTutorialNotes = useCallback(async (loadedNotes) => {
-    // Verifica se le note tutorial esistono
-    if (!checkTutorialNotes(loadedNotes)) {
-      console.log("Note tutorial non trovate, creazione in corso...");
-      // Crea le note tutorial
-      await createTutorialNotes();
-    } else {
-      console.log("Note tutorial esistenti, non è necessario crearle");
-    }
-  }, []);
-
-  // Funzione per creare le note tutorial
-  const createTutorialNotes = async () => {
-    console.log("Verifica creazione note tutorial...");
-    
-    // Controlla se le note tutorial esistono già usando i dati attuali
-    if (checkTutorialNotes(notes)) {
-      console.log("Le note tutorial esistono già. Operazione saltata.");
-      return [];
-    }
-    
     try {
-      // Chiara indicazione che stiamo creando nuove note tutorial
-      console.log("Creazione note tutorial...");
+      // Se l'utente non ha note, crea una nota tutorial
+      if (!loadedNotes || loadedNotes.length === 0) {
+        console.log("Nessuna nota trovata per l'utente, creazione nota di benvenuto automatica...");
+        
+        // Crea una nota locale e la mostra subito
+        const localNote = createLocalTutorialNote();
+        setNotes([localNote]);
+        setActiveNote(localNote);
+        
+        // Tenta di creare la nota sul server in background
+        try {
+          const welcomeNote = await createTutorialNote();
+          if (welcomeNote) {
+            console.log("Nota tutorial creata con successo sul server");
+            // Sostituisci la nota locale con quella del server
+            setNotes([welcomeNote]);
+            setActiveNote(welcomeNote);
+            navigate(`/note/${welcomeNote.id}`);
+            toast.success('Nota di benvenuto creata con successo!');
+          }
+        } catch (error) {
+          console.error("Errore nella creazione della nota tutorial sul server:", error);
+          // Teniamo la nota locale, non mostriamo errori all'utente
+        }
+      } else {
+        console.log("L'utente ha già delle note, nessuna nota tutorial necessaria");
+      }
+    } catch (error) {
+      console.error("Errore durante la verifica/creazione delle note tutorial:", error);
+    }
+  }, [navigate]);
+
+  // Nuova funzione che crea una singola nota tutorial salvata nel database
+  const createTutorialNote = async () => {
+    try {
+      const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+      const userId = currentUser?.id;
       
-      // Crea le due note tutorial come prima
-      const welcomeNote = await createNote({
+      if (!userId) {
+        console.warn('Utente non autenticato, impossibile creare nota tutorial');
+        return null;
+      }
+      
+      console.log("Creazione nota tutorial permanente per utente:", userId);
+      
+      // Creiamo prima una nota base con contenuto minimale
+      const welcomeNote = await noteApi.createNote({
         title: "Benvenuto in Upsearch Notepad",
         content: `<h1>Benvenuto in Upsearch Notepad!</h1>
-        <p>Questa è la tua guida rapida per iniziare a utilizzare Upsearch Notepad. Ecco come iniziare:</p>
-        <h2>Funzionalità di base</h2>
-        <ul>
-          <li><strong>Creare una nota:</strong> Clicca sul pulsante "Nuova Nota" nella barra laterale.</li>
-          <li><strong>Modificare una nota:</strong> Seleziona una nota dalla barra laterale e inizia a scrivere.</li>
-          <li><strong>Salvare le modifiche:</strong> Le modifiche vengono salvate automaticamente, ma puoi anche cliccare sul pulsante "Salva" nella barra degli strumenti.</li>
-          <li><strong>Organizzare le note:</strong> Trascina le note nella barra laterale per organizzarle in cartelle.</li>
-        </ul>
-        <p>Upsearch Notepad funziona sia online che offline. Le modifiche fatte offline verranno sincronizzate automaticamente quando tornerai online.</p>`,
+        <p>Caricamento della guida completa in corso...</p>`,
         isTutorial: true,
+        userId: userId,
         tags: ["tutorial", "guida"]
       });
       
-      const featuresNote = await createNote({
-        title: "Funzionalità avanzate",
-        content: `<h1>Funzionalità avanzate di Upsearch Notepad</h1>
-        <p>Scopri come sfruttare al massimo Upsearch Notepad con queste funzionalità avanzate:</p>
-        <h2>Formattazione del testo</h2>
-        <ul>
-          <li><strong>Stili di testo:</strong> Usa i pulsanti nella barra degli strumenti per formattare il testo in grassetto, corsivo o come codice.</li>
-          <li><strong>Titoli:</strong> Crea una struttura con i titoli di diversi livelli (H1, H2, H3).</li>
-          <li><strong>Liste:</strong> Crea elenchi puntati o numerati per organizzare le tue informazioni.</li>
-        </ul>
-        <h2>Contenuti multimediali</h2>
-        <ul>
-          <li><strong>Disegni:</strong> Inserisci disegni a mano libera direttamente nelle tue note.</li>
-          <li><strong>Documenti:</strong> Allega file PDF o altri documenti alle tue note.</li>
-          <li><strong>Link:</strong> Inserisci collegamenti a siti web esterni.</li>
-        </ul>
-        <h2>Organizzazione</h2>
-        <ul>
-          <li><strong>Tag:</strong> Aggiungi tag alle tue note per una ricerca più veloce.</li>
-          <li><strong>Ricerca:</strong> Cerca all'interno di tutte le tue note con la funzione di ricerca.</li>
-          <li><strong>Esportazione:</strong> Esporta le tue note in formati come TXT, HTML o PDF.</li>
-        </ul>
-        <p>Esplora queste funzionalità per rendere le tue note più ricche e organizzate!</p>`,
-        isTutorial: true,
-        tags: ["tutorial", "avanzato"]
-      });
+      // Una volta creata la nota base, aggiorniamo con il contenuto completo
+      if (welcomeNote && welcomeNote.id) {
+        // Aggiorniamo il contenuto completo in una seconda chiamata
+        const updatedNote = await noteApi.updateNote(welcomeNote.id, {
+          content: `<h1 style="text-align: center; color: #3498db;">Benvenuto in Upsearch Notepad!</h1>
+          <p>Questa guida ti mostrerà come utilizzare tutte le funzionalità dell'editor per rendere le tue note davvero efficaci.</p>
+          
+          <h2 style="color: #2ecc71;">Formattazione del testo</h2>
+          <p>La barra degli strumenti in alto ti permette di formattare il testo in vari modi:</p>
+          <ul>
+            <li><strong>Grassetto</strong>: Seleziona il testo e clicca sul pulsante B o usa Ctrl+B</li>
+            <li><em>Corsivo</em>: Seleziona il testo e clicca sul pulsante I o usa Ctrl+I</li>
+            <li><u>Sottolineato</u>: Seleziona il testo e clicca sul pulsante U o usa Ctrl+U</li>
+            <li><s>Barrato</s>: Seleziona il testo e clicca sul pulsante S</li>
+          </ul>
+          
+          <h2 style="color: #e74c3c;">Titoli e paragrafi</h2>
+          <p>Puoi utilizzare diversi livelli di titoli per organizzare i tuoi contenuti:</p>
+          <h3>Questo è un titolo di livello 3</h3>
+          <h4>Questo è un titolo di livello 4</h4>
+          <p>I titoli aiutano a strutturare le tue note e renderle più leggibili.</p>
+
+          <h2 style="color: #9b59b6;">Elenchi</h2>
+          <p>Puoi creare elenchi puntati e numerati:</p>
+          <ul>
+            <li>Elemento 1</li>
+            <li>Elemento 2</li>
+            <li>Elemento 3</li>
+      </ul>
+
+          <p>Oppure elenchi numerati:</p>
+          <ol>
+            <li>Primo punto</li>
+            <li>Secondo punto</li>
+            <li>Terzo punto</li>
+          </ol>
+
+          <h2 style="color: #f39c12;">Allineamento del testo</h2>
+          <p style="text-align: left;">Questo testo è allineato a sinistra</p>
+          <p style="text-align: center;">Questo testo è centrato</p>
+          <p style="text-align: right;">Questo testo è allineato a destra</p>
+
+          <h2 style="color: #16a085;">Colori e dimensioni</h2>
+          <p>Puoi cambiare il <span style="color: #e74c3c;">colore</span> del <span style="color: #3498db;">testo</span> utilizzando il selettore colori nella barra degli strumenti.</p>
+          <p>E anche modificare la <span style="font-size: 18px;">dimensione</span> del <span style="font-size: 22px;">testo</span> secondo le tue <span style="font-size: 26px;">preferenze</span>.</p>
+
+          <h2 style="color: #2980b9;">Funzionalità avanzate</h2>
+          <p>Upsearch Notepad offre anche funzionalità avanzate:</p>
+          <ul>
+            <li><strong>Disegni</strong>: Puoi inserire disegni a mano libera direttamente nelle tue note</li>
+            <li><strong>Documenti</strong>: Allega file alle tue note</li>
+            <li><strong>Organizzazione</strong>: Trascina le note nella barra laterale per organizzarle in cartelle</li>
+          </ul>
+
+          <h2 style="color: #27ae60;">Scorciatoie da tastiera</h2>
+          <table border="1" cellpadding="5" style="width: 100%; border-collapse: collapse; margin-top: 10px;">
+            <tr style="background-color: #f2f2f2;">
+              <th>Azione</th>
+              <th>Scorciatoia</th>
+            </tr>
+            <tr>
+              <td>Salva nota</td>
+              <td>Ctrl+S</td>
+            </tr>
+            <tr>
+              <td>Grassetto</td>
+              <td>Ctrl+B</td>
+            </tr>
+            <tr>
+              <td>Corsivo</td>
+              <td>Ctrl+I</td>
+            </tr>
+            <tr>
+              <td>Sottolineato</td>
+              <td>Ctrl+U</td>
+            </tr>
+            <tr>
+              <td>Elenco puntato</td>
+              <td>Ctrl+Shift+8</td>
+            </tr>
+            <tr>
+              <td>Elenco numerato</td>
+              <td>Ctrl+Shift+7</td>
+            </tr>
+          </table>
+
+          <h2 style="color: #d35400; margin-top: 20px;">Sincronizzazione</h2>
+          <p>Upsearch Notepad funziona sia online che offline. Le modifiche fatte offline verranno sincronizzate automaticamente quando tornerai online.</p>
+
+          <p style="text-align: center; margin-top: 30px; font-style: italic;">Inizia subito a creare note straordinarie!</p>
+          <p style="text-align: center; color: #7f8c8d; font-size: 14px;">Puoi eliminare questa nota in qualsiasi momento quando non ti servirà più</p>
+          `
+        });
+        
+        return updatedNote || welcomeNote;
+      }
       
-      console.log("Note tutorial create con successo");
-      return [welcomeNote, featuresNote];
+      return welcomeNote;
     } catch (error) {
-      console.error("Errore nella creazione delle note tutorial:", error);
-      return [];
+      console.error("Errore nella creazione della nota tutorial:", error);
+      // Non rilanciare l'errore, gestiamo il fallimento silenziosamente
+      return null;
     }
+  };
+
+  // Crea una singola nota tutorial locale con contenuto completo
+  const createLocalTutorialNote = () => {
+    const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+    const userId = currentUser?.id || 'temp-user';
+    
+    return {
+      id: 'tutorial-temp-' + Date.now(),
+      title: "Benvenuto in Upsearch Notepad",
+      content: `<h1 style="text-align: center; color: #3498db;">Benvenuto in Upsearch Notepad!</h1>
+      <p>Questa guida ti mostrerà come utilizzare tutte le funzionalità dell'editor per rendere le tue note davvero efficaci.</p>
+      
+      <h2 style="color: #2ecc71;">Formattazione del testo</h2>
+      <p>La barra degli strumenti in alto ti permette di formattare il testo in vari modi:</p>
+      <ul>
+        <li><strong>Grassetto</strong>: Seleziona il testo e clicca sul pulsante B o usa Ctrl+B</li>
+        <li><em>Corsivo</em>: Seleziona il testo e clicca sul pulsante I o usa Ctrl+I</li>
+        <li><u>Sottolineato</u>: Seleziona il testo e clicca sul pulsante U o usa Ctrl+U</li>
+        <li><s>Barrato</s>: Seleziona il testo e clicca sul pulsante S</li>
+      </ul>
+
+      <h2 style="color: #e74c3c;">Titoli e paragrafi</h2>
+      <p>Puoi utilizzare diversi livelli di titoli per organizzare i tuoi contenuti:</p>
+      <h3>Questo è un titolo di livello 3</h3>
+      <h4>Questo è un titolo di livello 4</h4>
+      <p>I titoli aiutano a strutturare le tue note e renderle più leggibili.</p>
+
+      <h2 style="color: #9b59b6;">Elenchi</h2>
+      <p>Puoi creare elenchi puntati e numerati:</p>
+      <ul>
+        <li>Elemento 1</li>
+        <li>Elemento 2</li>
+        <li>Elemento 3</li>
+      </ul>
+
+      <p>Crea note efficaci con questi strumenti e organizzale come preferisci.</p>`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      userId: userId,
+      isTutorial: true,
+      temporary: true,
+      tags: ["tutorial", "guida"]
+    };
   };
 
   // Funzione per creare note tutorial locali (senza API)

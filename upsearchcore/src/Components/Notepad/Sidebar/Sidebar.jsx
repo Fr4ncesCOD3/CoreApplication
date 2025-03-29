@@ -49,12 +49,34 @@ const Sidebar = ({
     
     console.log(`Filtraggio note per utente ${userId}, totale note: ${notes.length}`);
     
-    // Filtra le note per utente corrente
-    const userNotes = notes.filter(note => 
-      !note.userId || note.userId === userId || note.isTutorial
-    );
+    // Filtra le note per utente corrente in modo RIGOROSO
+    const userNotes = notes.filter(note => {
+      // Verifica che la nota appartenga all'utente corrente o sia una nota tutorial esplicita
+      return (note.userId === userId) || (note.isTutorial === true);
+    });
     
     console.log(`Note filtrate per utente: ${userNotes.length}`);
+    
+    // Se non ci sono note dell'utente, mostra una nota temporanea SOLO se non ci sono già tentativi in corso
+    if (userNotes.length === 0 && !notes.some(note => note.temporary === true)) {
+      const tutorialNote = {
+        id: 'tutorial-temp',
+        title: 'Guida di benvenuto a Upsearch Notepad',
+        content: 'Benvenuto in Upsearch Notepad! Questa nota contiene consigli utili per iniziare a utilizzare l\'applicazione.',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        isTutorial: true,
+        userId: userId,
+        temporary: true
+      };
+      
+      console.log('Creata nota tutorial temporanea in attesa della nota reale');
+      setFilteredNotes([tutorialNote]);
+      return;
+    }
+    
+    // Se ci sono già delle note (reali o temporanee), mostrare quelle
+    setFilteredNotes(userNotes);
     
     // Se non c'è un termine di ricerca, ordina le note per data
     if (!searchTerm) {
@@ -183,7 +205,7 @@ const Sidebar = ({
               <Draggable 
                 draggableId={note.id} 
                 index={notes.indexOf(note)} 
-                isDragDisabled={isDragging || isTutorial || isTemporary}
+                isDragDisabled={isDragging || isTutorial || isTemporary || note.id === 'tutorial-temp' || note.id.startsWith('tutorial-temp-')}
                 key={note.id}
               >
                 {(provided) => (
@@ -195,15 +217,15 @@ const Sidebar = ({
                   >
                     <div className="note-item-content" onClick={() => handleNoteClick(note.id)}>
                       {hasChildren && (
-                        <button 
-                          className="toggle-btn"
+                        <span 
+                          className="toggle-icon"
                           onClick={(e) => {
                             e.stopPropagation();
                             toggleFolder(note.id);
                           }}
                         >
                           {isExpanded ? <FiChevronDown /> : <FiChevronRight />}
-                        </button>
+                        </span>
                       )}
                       <div className="note-details">
                         <span className={`note-title ${isTutorial ? 'tutorial-title' : ''} ${isTemporary ? 'temporary-title' : ''}`}>
