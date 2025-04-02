@@ -525,11 +525,22 @@ const Notepad = ({ theme, toggleTheme }) => {
 
   const updateNote = useCallback(async (id, updates) => {
     try {
-      const updatedNote = await noteApi.updateNote(id, {
-        ...updates,
-      updatedAt: new Date().toISOString()
-      });
+      // Assicurati che il token CSRF sia valido prima di procedere
+      const csrfToken = CacheService.getCsrfToken();
+      if (!csrfToken) {
+        console.log('Token CSRF mancante, ne richiedo uno nuovo');
+        await getCsrfToken(true);
+      }
       
+      // Aggiungi timestamp di aggiornamento se non presente
+      if (!updates.updatedAt) {
+        updates.updatedAt = new Date().toISOString();
+      }
+      
+      // Aggiorna la nota
+      const updatedNote = await noteApi.updateNote(id, updates);
+      
+      // Aggiorna lo stato locale
       setNotes(prev => prev.map(note => 
         note.id === id ? { ...note, ...updatedNote } : note
       ));
@@ -541,10 +552,53 @@ const Notepad = ({ theme, toggleTheme }) => {
       return updatedNote;
     } catch (error) {
       console.error('Errore nell\'aggiornamento della nota:', error);
-      toast.error('Impossibile aggiornare la nota. Riprova più tardi.');
-      return null;
+      
+      // Gestione specifica per errori 500
+      if (error.response && error.response.status === 500) {
+        if (error.response.data && typeof error.response.data === 'object') {
+          // Controlla se è un problema di CSRF
+          if (error.response.data.message && error.response.data.message.includes('CSRF')) {
+            try {
+              await getCsrfToken(true); // Forza il recupero di un nuovo token CSRF
+              
+              // Riprova l'operazione con il nuovo token
+              return await noteApi.updateNote(id, updates);
+            } catch (retryError) {
+              console.error('Errore nel recupero del token CSRF:', retryError);
+              throw retryError;
+            }
+          }
+        }
+      }
+      
+      // Se siamo offline, aggiorna localmente
+      if (!navigator.onLine) {
+        console.log('Modalità offline - aggiornamento locale della nota');
+        const offlineUpdatedNote = {
+          ...updates,
+          id,
+          temporary: true,
+          updatedAt: new Date().toISOString()
+        };
+        
+        // Aggiorna le note locali
+        setNotes(prev => prev.map(note => 
+          note.id === id ? { ...note, ...offlineUpdatedNote } : note
+        ));
+        
+        if (activeNote && activeNote.id === id) {
+          setActiveNote(prev => ({ ...prev, ...offlineUpdatedNote }));
+        }
+        
+        // Salva nella cache per sincronizzazione futura
+        CacheService.updateNoteInCache(offlineUpdatedNote);
+        
+        return offlineUpdatedNote;
+      }
+      
+      throw error;
     }
-  }, [activeNote]);
+  }, [activeNote, getCsrfToken]);
 
   const deleteNote = useCallback(async (id) => {
     if (!window.confirm('Sei sicuro di voler eliminare questa nota?')) {
@@ -592,69 +646,58 @@ const Notepad = ({ theme, toggleTheme }) => {
     }
   }, [notes]);
 
-  const handleSaveNote = useCallback(async (noteId, content) => {
+  const handleSaveNote = useCallback(async (noteId) => {
     if (!noteId || !activeNote) return;
     
     try {
-    setIsSaving(true);
+      setIsSaving(true);
       
-      // Utilizza il contenuto passato, altrimenti prende il contenuto corrente dell'activeNote
-      let contentToSave = content;
-      
-      // Se non è stato fornito un contenuto ma esiste una bozza in sessionStorage, usa quella
-      if (!contentToSave) {
-        try {
-          const draftData = sessionStorage.getItem(`draft_${noteId}`);
-          if (draftData) {
-            const draft = JSON.parse(draftData);
-            contentToSave = draft.content;
-            // Rimuovi la bozza dopo l'uso
-            sessionStorage.removeItem(`draft_${noteId}`);
-          } else {
-            // Altrimenti usa il contenuto attuale della nota
-            contentToSave = activeNote.content;
-          }
-        } catch (error) {
-          console.error('Errore nel recupero della bozza:', error);
-          contentToSave = activeNote.content;
-        }
+      // Recupera la bozza dal session storage
+      const draft = CacheService.getDraft(noteId);
+      if (!draft) {
+        setIsSaving(false);
+        return null; // Nessuna bozza da salvare
       }
       
-      // Salva la nota sul server
-      const updatedNote = await updateNote(noteId, { 
-        content: contentToSave,
-        updatedAt: new Date().toISOString() 
-      });
+      // Prepara i dati per l'aggiornamento
+      const updateData = {
+        content: draft.content,
+        updatedAt: new Date().toISOString()
+      };
+      
+      // Se la bozza include anche un titolo, aggiungilo ai dati da aggiornare
+      if (draft.title) {
+        updateData.title = draft.title;
+      }
+      
+      // Esegui l'aggiornamento
+      const updatedNote = await updateNote(noteId, updateData);
       
       if (updatedNote) {
+        // Aggiorna timestamp dell'ultima sincronizzazione
         setLastSyncTime(new Date());
-        setContentChanged(false); // Resetta lo stato delle modifiche
         
-        // Aggiorna la nota nella lista locale
-        setNotes(prevNotes => prevNotes.map(n => 
-          n.id === noteId ? { ...n, ...updatedNote } : n
-        ));
+        // Resetta lo stato delle modifiche
+        setContentChanged(false);
         
-        // Aggiorna la nota attiva
-        setActiveNote(prev => ({ ...prev, ...updatedNote }));
+        // Rimuovi la bozza dopo il salvataggio
+        CacheService.removeDraft(noteId);
         
         return updatedNote;
       }
     } catch (error) {
-      console.error('Errore durante il salvataggio:', error);
+      console.error('Errore durante il salvataggio della nota:', error);
       
-      // Se siamo offline, salva localmente
+      // Non propagare l'errore, ma notifica l'utente
       if (!navigator.onLine) {
         toast.warning('Modalità offline. Le modifiche saranno sincronizzate quando tornerai online.');
       } else {
-        toast.error('Errore durante il salvataggio della nota. Riprova più tardi.');
+        toast.error('Errore durante il salvataggio. La bozza è stata mantenuta.');
       }
-      
-      throw error;
     } finally {
       setIsSaving(false);
     }
-  }, [notes, isSaving, updateNote, activeNote, setNotes]);
+  }, [activeNote, updateNote, setContentChanged, setLastSyncTime]);
 
   const moveNote = useCallback(async (noteId, newParentId) => {
     // Verifica che il nuovo parent non sia un discendente della nota
@@ -845,7 +888,7 @@ const Notepad = ({ theme, toggleTheme }) => {
   }, [loadNotes]);
   
   // Modifica loadSelectedNote per recuperare le modifiche non salvate
-  const loadSelectedNote = useCallback((id) => {
+  const loadSelectedNote = useEffect(() => {
     console.log('Caricamento nota:', id);
     const note = notes.find(n => n.id === id);
     
@@ -887,30 +930,111 @@ const Notepad = ({ theme, toggleTheme }) => {
   
   // Aggiungi questa funzione per gestire il passaggio tra note
   const handleNoteSelect = useCallback(async (noteId) => {
-    // Verifica se stiamo già visualizzando questa nota
-    if (activeNote && activeNote.id === noteId) return;
-    
-    // Se ci sono modifiche non salvate, chiedi conferma
-    if (contentChanged) {
-      const shouldSave = window.confirm('Ci sono modifiche non salvate. Vuoi salvare prima di cambiare nota?');
-      if (shouldSave) {
-        try {
-          await handleSaveNote(activeNote.id);
-        } catch (error) {
-          console.error('Errore durante il salvataggio:', error);
-        }
-      }
-      // Resetta lo stato delle modifiche
-      setContentChanged(false);
+    // Se stiamo già visualizzando questa nota, non fare nulla
+    if (activeNote && activeNote.id === noteId) {
+      console.log('Nota già attiva:', noteId);
+      return;
     }
+    
+    console.log('Cambio alla nota:', noteId);
+    
+    // Prima di cambiare nota, salva le modifiche correnti come bozza
+    if (activeNote && contentChanged) {
+      try {
+        // Ottieni l'ultimo contenuto dell'editor dall'elemento DOM
+        const editorElement = document.querySelector('.ProseMirror');
+        let currentContent = '';
+        
+        if (editorElement) {
+          // Usa innerHTML per ottenere il contenuto HTML completo
+          currentContent = editorElement.innerHTML;
+          console.log('Contenuto ottenuto dall\'editor per salvataggio bozza');
+        } else if (activeNote.content) {
+          // Se non possiamo ottenere il contenuto dall'editor, usa quello memorizzato nell'oggetto nota
+          currentContent = activeNote.content;
+          console.log('Utilizzato contenuto dalla nota attiva per salvataggio bozza');
+        }
+        
+        if (currentContent) {
+          // Salva come bozza nel session storage
+          CacheService.saveDraft(activeNote.id, currentContent, activeNote.title);
+          console.log(`Bozza salvata per nota ID ${activeNote.id} prima del cambio`);
+        }
+      } catch (error) {
+        console.error('Errore nel salvataggio della bozza prima del cambio nota:', error);
+      }
+    }
+    
+    // Resetta lo stato di modifica per la nuova nota
+    setContentChanged(false);
+    
+    // Imposta l'URL corretto prima di aggiornare lo stato
+    navigate(`/note/${noteId}`);
     
     // Carica la nota selezionata
     const selectedNote = notes.find(note => note.id === noteId);
     if (selectedNote) {
-      setActiveNote(selectedNote);
-      navigate(`/note/${noteId}`);
+      // Imposta esplicitamente l'ID della nota attiva per garantire l'aggiornamento dell'interfaccia
+      setActiveNoteId(noteId);
+      
+      // Verifica se c'è una bozza salvata per questa nota
+      const hasDraft = CacheService.hasDraft(noteId);
+      let noteToActivate = {...selectedNote};
+      
+      if (hasDraft) {
+        // Se c'è una bozza per la nuova nota, caricala
+        const draft = CacheService.getDraft(noteId);
+        if (draft && draft.content) {
+          // Crea un nuovo oggetto nota con il contenuto della bozza
+          noteToActivate = {
+            ...selectedNote,
+            content: draft.content,
+            title: draft.title || selectedNote.title,
+            hasDraft: true // Aggiungiamo un flag per tracciare che si tratta di una bozza
+          };
+          console.log(`Caricata bozza per nota ID ${noteId}`);
+          
+          // Aggiorna lo stato di modifica
+          setContentChanged(true);
+        }
+      }
+      
+      // Aggiorna lo stato della nota attiva con un breve ritardo
+      // per evitare race conditions con altri aggiornamenti dell'interfaccia
+      setTimeout(() => {
+        setActiveNote(noteToActivate);
+        
+        // Salva questa nota come ultima nota attiva
+        CacheService.saveLastActiveNote(selectedNote);
+        
+        // Notifica l'utente solo se necessario
+        if (hasDraft) {
+          toast.info(`Caricata bozza per "${selectedNote.title}"`);
+        }
+        
+        console.log(`Nota attiva impostata: ${noteId} (${selectedNote.title})`);
+      }, 10);
+      
+      // Se siamo su mobile, chiudi la sidebar dopo la selezione
+      if (window.innerWidth < 768) {
+        setIsSidebarOpen(false);
+      }
+    } else {
+      console.error('Nota selezionata non trovata:', noteId);
+      
+      // Se la nota non è stata trovata, puoi decidere di tornare alla prima nota disponibile
+      if (notes.length > 0) {
+        const firstNote = notes[0];
+        setActiveNote(firstNote);
+        setActiveNoteId(firstNote.id);
+        navigate(`/note/${firstNote.id}`);
+        toast.warning('La nota richiesta non è stata trovata. Visualizzazione prima nota disponibile.');
+      } else {
+        // Se non ci sono note, mostra un messaggio all'utente
+        toast.error('Nessuna nota disponibile. Crea una nuova nota.');
+      }
     }
-  }, [activeNote, contentChanged, handleSaveNote, notes, navigate]);
+  }, [activeNote, contentChanged, navigate, notes]);
 
   // Aggiungi questa funzione per gestire il cambio di nota attiva
   const handleActiveNoteChange = useCallback((noteId) => {
@@ -967,6 +1091,12 @@ const Notepad = ({ theme, toggleTheme }) => {
       
       if (cachedNote) {
         console.log('Nota trovata nella cache:', id);
+        
+        // Correggi eventuali problemi con l'HTML
+        if (cachedNote.content) {
+          cachedNote.content = fixEscapedHtml(cachedNote.content);
+        }
+        
         setActiveNote(cachedNote);
         setActiveNoteId(id);
         setLoadingNote(false);
@@ -975,6 +1105,12 @@ const Notepad = ({ theme, toggleTheme }) => {
       
       // Se non è nella cache, recuperala dal server
       const note = await noteApi.getNoteById(id);
+      
+      // Correggi eventuali problemi con l'HTML
+      if (note.content) {
+        note.content = fixEscapedHtml(note.content);
+      }
+      
       setActiveNote(note);
       setActiveNoteId(id);
       
@@ -1018,6 +1154,239 @@ const Notepad = ({ theme, toggleTheme }) => {
     } finally {
       setLoadingNote(false);
     }
+  };
+
+  // Ottimizza la gestione del caricamento iniziale delle note
+  useEffect(() => {
+    const loadInitialNotes = async () => {
+      setIsLoading(true);
+      let retryCount = 0;
+      const maxRetries = 2;
+      
+      const loadNotes = async () => {
+        try {
+          // Carica le note dal server
+          console.log(`Tentativo ${retryCount + 1}/${maxRetries + 1} di caricamento delle note`);
+          const notes = await noteApi.getNotes();
+          setNotes(notes || []);
+          
+          // Verifica se c'è un ID nota nell'URL
+          const pathParts = window.location.pathname.split('/');
+          const noteIdFromUrl = pathParts[pathParts.length - 1];
+          
+          if (noteIdFromUrl && noteIdFromUrl !== '' && noteIdFromUrl !== '/') {
+            // Cerca la nota corrispondente all'ID nell'URL
+            const noteFromUrl = notes.find(note => note.id === noteIdFromUrl);
+            if (noteFromUrl) {
+              setActiveNote(noteFromUrl);
+              CacheService.saveLastActiveNote(noteFromUrl);
+              return true; // Caricamento riuscito
+            }
+          }
+          
+          // Se non c'è un ID valido nell'URL, verifica se c'è un'ultima nota attiva
+          const lastActiveNoteId = CacheService.getLastActiveNoteId();
+          if (lastActiveNoteId) {
+            const lastActiveNote = notes.find(note => note.id === lastActiveNoteId);
+            if (lastActiveNote) {
+              setActiveNote(lastActiveNote);
+              navigate(`/note/${lastActiveNoteId}`);
+              return true; // Caricamento riuscito
+            }
+          }
+          
+          // Se non ci sono note attive recenti, seleziona la prima nota (se disponibile)
+          if (notes && notes.length > 0) {
+            setActiveNote(notes[0]);
+            navigate(`/note/${notes[0].id}`);
+          }
+          
+          return true; // Caricamento riuscito
+        } catch (error) {
+          console.error(`Tentativo ${retryCount + 1}: Errore nel caricamento delle note:`, error);
+          
+          // Se abbiamo altri tentativi disponibili
+          if (retryCount < maxRetries) {
+            retryCount++;
+            const delay = Math.min(1000 * Math.pow(2, retryCount), 5000); // Backoff esponenziale capped a 5 secondi
+            console.log(`Riprovo a caricare le note tra ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            return false; // Riprova
+          }
+          
+          // Ultimo tentativo fallito
+          toast.error('Impossibile caricare le note. Verranno utilizzate le note in cache.');
+          
+          // Carica le note dalla cache
+          const cachedNotes = CacheService.getCachedNotes();
+          if (cachedNotes && cachedNotes.length > 0) {
+            console.log('Utilizzo delle note dalla cache dopo fallimento del caricamento');
+            setNotes(cachedNotes);
+            
+            // Prova a trovare e impostare l'ultima nota attiva
+            const lastActiveNoteId = CacheService.getLastActiveNoteId();
+            if (lastActiveNoteId) {
+              const cachedActiveNote = cachedNotes.find(note => note.id === lastActiveNoteId);
+              if (cachedActiveNote) {
+                setActiveNote(cachedActiveNote);
+                navigate(`/note/${cachedActiveNote.id}`);
+              } else {
+                setActiveNote(cachedNotes[0]);
+                navigate(`/note/${cachedNotes[0].id}`);
+              }
+            } else {
+              setActiveNote(cachedNotes[0]);
+              navigate(`/note/${cachedNotes[0].id}`);
+            }
+          } else {
+            // Se non ci sono note in cache, mostra un messaggio
+            toast.warning('Nessuna nota disponibile. Crea una nuova nota.');
+          }
+          
+          return true; // Terminato con gestione errore
+        }
+      };
+      
+      // Esegui fino a quando il caricamento non riesce o abbiamo esaurito i tentativi
+      let completed = false;
+      while (!completed) {
+        completed = await loadNotes();
+      }
+      
+      setIsLoading(false);
+    };
+    
+    loadInitialNotes();
+  }, [navigate, setActiveNote, setNotes]);
+  
+  // Salva l'ultima nota attiva quando cambia
+  useEffect(() => {
+    if (activeNote) {
+      CacheService.saveLastActiveNote(activeNote);
+    }
+  }, [activeNote]);
+
+  // Rimuovi il vecchio modale per le bozze e aggiorna la funzione di controllo
+  useEffect(() => {
+    // Verifica se ci sono bozze all'avvio dell'applicazione
+    const checkForDrafts = async () => {
+      if (CacheService.hasAnyDrafts()) {
+        // Ottieni tutte le bozze
+        const drafts = CacheService.getAllDrafts();
+        console.log(`Trovate ${drafts.length} bozze da recuperare automaticamente`);
+        
+        // Ripristina automaticamente la bozza dell'ultima nota attiva, se presente
+        const lastActiveNoteId = CacheService.getLastActiveNoteId();
+        if (lastActiveNoteId) {
+          const draftForActiveNote = drafts.find(draft => draft.noteId === lastActiveNoteId);
+          if (draftForActiveNote) {
+            console.log(`Recupero automatico della bozza per la nota attiva: ${lastActiveNoteId}`);
+            const noteToOpen = notes.find(n => n.id === lastActiveNoteId);
+            if (noteToOpen) {
+              // Impostare come nota attiva e navigare ad essa
+              setActiveNote(noteToOpen);
+              navigate(`/note/${lastActiveNoteId}`);
+              // Non rimuoviamo la bozza dal sessionStorage, sarà gestita dall'editor
+            }
+          }
+        }
+        
+        // Tentativo di sincronizzazione automatica delle altre bozze
+        for (const draft of drafts) {
+          // Salta la nota attiva che abbiamo già gestito
+          if (draft.noteId === lastActiveNoteId) continue;
+          
+          const note = notes.find(n => n.id === draft.noteId);
+          if (note && navigator.onLine) {
+            try {
+              console.log(`Tentativo di sincronizzazione automatica per bozza della nota: ${draft.noteId}`);
+              
+              // Tenta di aggiornare la nota con il contenuto della bozza
+              await noteApi.updateNote(draft.noteId, {
+                content: draft.draftData.content,
+                updatedAt: new Date().toISOString()
+              });
+              
+              // Se il salvataggio ha successo, rimuovi la bozza
+              CacheService.removeDraft(draft.noteId);
+              
+              console.log(`Sincronizzazione completata per nota: ${draft.noteId}`);
+            } catch (error) {
+              console.error(`Errore durante la sincronizzazione automatica della bozza ${draft.noteId}:`, error);
+              // Mantieni la bozza nel sessionStorage per ulteriori tentativi
+            }
+          }
+        }
+      }
+    };
+    
+    // Esegui il controllo all'avvio dell'applicazione
+    checkForDrafts();
+  }, [notes, navigate, setActiveNote]);
+
+  // Aggiungi questo useEffect per ascoltare gli eventi di cambio titolo in tempo reale
+  useEffect(() => {
+    // Funzione handler per l'evento di cambio titolo
+    const handleNoteTitleChange = (event) => {
+      const { noteId, newTitle } = event.detail;
+      
+      // Se la nota correntemente attiva è quella modificata, aggiorniamo il suo titolo
+      if (activeNote && activeNote.id === noteId) {
+        setActiveNote(prevNote => ({
+          ...prevNote,
+          title: newTitle
+        }));
+      }
+      
+      // Aggiorna anche la nota nell'array di note
+      setNotes(prevNotes => 
+        prevNotes.map(note => 
+          note.id === noteId 
+            ? { ...note, title: newTitle } 
+            : note
+        )
+      );
+    };
+    
+    // Registra il listener per l'evento personalizzato
+    window.addEventListener('noteTitleChanged', handleNoteTitleChange);
+    
+    // Rimuovi il listener quando il componente viene smontato
+    return () => {
+      window.removeEventListener('noteTitleChanged', handleNoteTitleChange);
+    };
+  }, [activeNote]);
+
+  // Funzione per correggere l'HTML con escape multipli
+  const fixEscapedHtml = (html) => {
+    if (!html) return '';
+    
+    // Verifica se il contenuto contiene già entità HTML ripetute
+    if (html.includes('&amp;lt;') || html.includes('&lt;p') || html.includes('&amp;gt;')) {
+      console.warn('Rilevato HTML con escape multipli. Tentativo di correzione...');
+      let fixedContent = html;
+      
+      // Applica decodifica ricorsivamente fino a quando non ci sono più cambiamenti
+      let lastResult = '';
+      let iterations = 0;
+      const maxIterations = 5; // Limite per evitare loop infiniti
+      
+      while (fixedContent !== lastResult && iterations < maxIterations) {
+        lastResult = fixedContent;
+        fixedContent = fixedContent
+          .replace(/&amp;/g, '&')
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/&quot;/g, '"')
+          .replace(/&#39;/g, "'");
+        iterations++;
+      }
+      
+      console.log(`Correzione HTML completata in ${iterations} iterazioni`);
+      return fixedContent;
+    }
+    
+    return html;
   };
 
   return (

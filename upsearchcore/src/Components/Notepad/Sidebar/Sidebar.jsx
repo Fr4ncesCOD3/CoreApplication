@@ -236,9 +236,19 @@ const Sidebar = ({
   }
   
   const handleNoteClick = (id) => {
-    console.log(`Nota selezionata: ${id}`);
-    setActiveNoteId(id);
-    navigate(`/note/${id}`);
+    console.log(`Nota selezionata da Sidebar: ${id}`);
+    
+    // Utilizza la funzione di callback fornita dal parent
+    if (typeof setActiveNoteId === 'function') {
+      setActiveNoteId(id);
+      
+      // Log per confermare che la funzione di callback è stata chiamata
+      console.log(`Callback setActiveNoteId chiamata con id: ${id}`);
+    } else {
+      console.error('setActiveNoteId non è una funzione valida');
+      // Fallback di navigazione diretta se la callback non è disponibile
+      navigate(`/note/${id}`);
+    }
     
     // Chiudi automaticamente la sidebar su dispositivi mobili
     if (window.innerWidth <= 768) {
@@ -401,6 +411,32 @@ const Sidebar = ({
       </div>
     );
   };
+
+  // Aggiungi questo useEffect per ascoltare gli eventi di cambio titolo
+  useEffect(() => {
+    // Funzione handler per l'evento di cambio titolo
+    const handleNoteTitleChange = (event) => {
+      const { noteId, newTitle } = event.detail;
+      
+      // Aggiorna solo localmente le note per riflettere il cambio titolo
+      // senza ricaricare tutta la lista
+      setFilteredNotes(prevNotes => 
+        prevNotes.map(note => 
+          note.id === noteId 
+            ? { ...note, title: newTitle } 
+            : note
+        )
+      );
+    };
+    
+    // Registra il listener per l'evento personalizzato
+    window.addEventListener('noteTitleChanged', handleNoteTitleChange);
+    
+    // Rimuovi il listener quando il componente viene smontato
+    return () => {
+      window.removeEventListener('noteTitleChanged', handleNoteTitleChange);
+    };
+  }, []);
 
   return (
     <div className="sidebar">

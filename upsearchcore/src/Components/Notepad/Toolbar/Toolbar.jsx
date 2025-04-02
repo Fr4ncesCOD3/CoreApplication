@@ -3,6 +3,7 @@ import { Container, Row, Col, Button, Form, Dropdown } from 'react-bootstrap'
 import { FiMenu, FiSave, FiTrash2, FiDownload, FiTag, FiX, FiCheck, FiPlus } from 'react-icons/fi'
 import './Toolbar.css'
 import { toast } from '../../../utils/notification'
+import { CacheService } from '../../../utils/cache'
 
 const Toolbar = ({ 
   note, 
@@ -40,8 +41,24 @@ const Toolbar = ({
   }, [showAddTag])
   
   const handleTitleChange = (e) => {
-    const newTitle = e.target.value
-    setTitle(newTitle)
+    const newTitle = e.target.value;
+    setTitle(newTitle);
+    
+    // Aggiorna temporaneamente il titolo nella nota attiva
+    // Questa modifica sarà visibile nella sidebar senza attendere il salvataggio
+    if (note) {
+      // Aggiorna in tempo reale il titolo nella sidebar
+      const updatedNote = { ...note, title: newTitle };
+      
+      // Salva il titolo nella bozza in sessionStorage (verrà usato poi per il salvataggio)
+      CacheService.saveDraft(note.id, note.content, newTitle);
+      
+      // Simuliamo un evento personalizzato per aggiornare il titolo nella sidebar
+      const titleChangeEvent = new CustomEvent('noteTitleChanged', {
+        detail: { noteId: note.id, newTitle }
+      });
+      window.dispatchEvent(titleChangeEvent);
+    }
   }
   
   const handleTitleBlur = async () => {
@@ -76,8 +93,8 @@ const Toolbar = ({
   const handleSaveNote = async () => {
     if (!note || loading) return;
     
-    // Verifica se il contenuto è cambiato
-    if (!contentChanged) {
+    // Verifica se il contenuto è cambiato o se esiste una bozza
+    if (!contentChanged && !CacheService.hasDraft(note.id)) {
       toast.info('Nessuna modifica da salvare');
       return;
     }
@@ -85,42 +102,138 @@ const Toolbar = ({
     setLoading(true);
     
     try {
-      // Recupera eventuali bozze salvate in sessionStorage
-      let content = null;
-      try {
-        const draftData = sessionStorage.getItem(`draft_${note.id}`);
-        if (draftData) {
-          const parsed = JSON.parse(draftData);
-          content = parsed.content;
-          // Rimuoviamo la bozza
-          sessionStorage.removeItem(`draft_${note.id}`);
+      // Prepara l'oggetto di aggiornamento
+      const updateData = {
+        updatedAt: new Date().toISOString()
+      };
+      
+      // Recupera bozza dal sessionStorage
+      const draft = CacheService.getDraft(note.id);
+      let contentToSave = null;
+      
+      if (draft) {
+        // Controlla che ci sia effettivamente del contenuto da salvare
+        if (draft.content && typeof draft.content === 'string') {
+          // Limita la dimensione del contenuto per evitare problemi col server
+          if (draft.content.length > 1000000) { // 1MB limite
+            console.warn('Contenuto troppo grande, troncato per evitare errori');
+            contentToSave = draft.content.substring(0, 1000000);
+            toast.warning('Il contenuto è stato troncato perché troppo grande');
+          } else {
+            contentToSave = draft.content;
+          }
+          
+          // Verifica che il contenuto non sia solo HTML vuoto o spazi
+          const htmlStripped = contentToSave.replace(/<[^>]*>/g, '').trim();
+          if (htmlStripped === '') {
+            // Il contenuto è solo HTML vuoto, salva un contenuto minimo
+            contentToSave = '<p></p>';
+          }
+          
+          // Sanitizza nuovamente prima di inviare al server
+          contentToSave = CacheService.sanitizeHtml(contentToSave);
+          
+          // Assegna il contenuto all'oggetto updateData
+          updateData.content = contentToSave;
+          
+          // Se c'è anche il titolo nella bozza
+          if (draft.title) {
+            // Assicurati che il titolo non sia troppo lungo
+            updateData.title = draft.title.substring(0, 255);
+          }
         }
-      } catch (error) {
-        console.error('Errore nel recupero della bozza:', error);
       }
       
-      // Effettua il salvataggio della nota con il contenuto recuperato dalla bozza (se presente)
-      await onSave(note.id, content);
-      
-      // Aggiorna anche il titolo se è stato modificato
+      // Se il titolo corrente è diverso, aggiornalo
       if (title !== note.title) {
-        await updateNote(note.id, { title });
+        updateData.title = title.substring(0, 255); // Limita lunghezza titolo
       }
       
-      toast.success('Nota salvata con successo');
+      // Se non ci sono dati da aggiornare
+      if (Object.keys(updateData).length <= 1) { // Solo updatedAt è presente
+        setLoading(false);
+        toast.info('Nessuna modifica da salvare');
+        return;
+      }
       
-      // Imposta lo stato delle modifiche su 'false' dopo il salvataggio
-      if (contentChanged && typeof onContentChange === 'function') {
-        onContentChange(false);
+      // Log per debug
+      console.log('Salvataggio nota con dimensione contenuto:', 
+        updateData.content ? updateData.content.length : 0, 'caratteri');
+      
+      // Prima di salvare, verifica il token CSRF
+      let csrfToken = CacheService.getCsrfToken();
+      if (!csrfToken) {
+        console.log('Token CSRF mancante, ottengo un nuovo token prima del salvataggio');
+        try {
+          if (typeof getCsrfToken === 'function') {
+            await getCsrfToken(true);
+          }
+        } catch (err) {
+          console.error('Errore ottenendo CSRF token:', err);
+        }
+      }
+      
+      // Effettua la chiamata di aggiornamento API con gestione errori migliorata
+      let updatedNote = null;
+      try {
+        updatedNote = await updateNote(note.id, updateData);
+      } catch (error) {
+        // Gestisci in modo specifico l'errore 500
+        if (error.response && error.response.status === 500) {
+          console.error('Errore 500 dal server durante il salvataggio, provo una strategia alternativa');
+          
+          // Tenta di inviare solo il titolo se il contenuto è il problema
+          if (updateData.content) {
+            try {
+              const titleOnlyUpdate = {
+                title: updateData.title || note.title,
+                updatedAt: updateData.updatedAt
+              };
+              console.log('Tentativo di aggiornare solo il titolo');
+              updatedNote = await updateNote(note.id, titleOnlyUpdate);
+              toast.warning('Contenuto non salvato a causa di un errore del server. Solo il titolo è stato aggiornato.');
+              // Non rimuovere la bozza qui, in modo che l'utente possa riprovare più tardi
+            } catch (titleError) {
+              console.error('Anche l\'aggiornamento del solo titolo è fallito:', titleError);
+              throw error; // Propaga l'errore originale
+            }
+          } else {
+            throw error; // Propaga l'errore se non c'è contenuto
+          }
+        } else {
+          throw error; // Propaga altri tipi di errore
+        }
+      }
+      
+      // Se il salvataggio è riuscito, rimuovi la bozza
+      if (updatedNote) {
+        CacheService.removeDraft(note.id);
+        
+        // Visualizza una notifica di successo
+        toast.success('Nota salvata con successo');
+        
+        // Aggiorna lo stato delle modifiche
+        if (contentChanged && typeof onContentChange === 'function') {
+          onContentChange(false);
+        }
+        
+        // Notifica il salvataggio completo
+        if (onSave && typeof onSave === 'function') {
+          onSave(updatedNote);
+        }
+        
+        return updatedNote;
       }
     } catch (error) {
       console.error('Errore durante il salvataggio:', error);
       
-      // Gestione degli errori in base allo stato della connessione
       if (!navigator.onLine) {
-        toast.warning('Nota salvata localmente. Verrà sincronizzata quando tornerai online.');
+        toast.warning('Sei offline. Le modifiche sono state salvate localmente e verranno sincronizzate quando tornerai online.');
+        // Assicuriamoci che la bozza sia salvata
+        return null;
       } else {
-        toast.error('Errore durante il salvataggio. Riprova più tardi.');
+        toast.error('Errore durante il salvataggio. La bozza è stata conservata e puoi riprovare più tardi.');
+        return null;
       }
     } finally {
       setLoading(false);

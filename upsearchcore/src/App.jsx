@@ -380,6 +380,31 @@ function App() {
     };
   }, []);
   
+  useEffect(() => {
+    // Verifica e recupera il token CSRF all'avvio dell'applicazione
+    const initializeApp = async () => {
+      const token = localStorage.getItem('token');
+      if (token) {
+        try {
+          // Verifica se abbiamo già un token CSRF nella cache
+          const csrfToken = CacheService.getCsrfToken();
+          
+          // Se non abbiamo un token CSRF valido, ne richiediamo uno nuovo
+          if (!csrfToken) {
+            console.log('Nessun token CSRF trovato all\'avvio, ne richiedo uno nuovo');
+            await getCsrfToken(true);
+          } else {
+            console.log('Token CSRF trovato nella cache:', csrfToken);
+          }
+        } catch (error) {
+          console.error('Errore durante l\'inizializzazione dell\'app:', error);
+        }
+      }
+    };
+    
+    initializeApp();
+  }, []);
+  
   return (
     <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <div className="app" data-theme={theme}>

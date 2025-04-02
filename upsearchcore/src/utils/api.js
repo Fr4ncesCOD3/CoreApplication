@@ -75,7 +75,8 @@ const getCsrfTokenDebounced = debounce(async () => {
     });
     
     if (response.data && response.data.token) {
-      setCsrfToken(response.data.token);
+      // Usa CacheService per salvare il token
+      CacheService.saveCsrfToken(response.data.token);
       return response.data.token;
     }
     return null;
@@ -85,29 +86,64 @@ const getCsrfTokenDebounced = debounce(async () => {
   }
 }, 1000);
 
-// Sostituisci la funzione getCsrfToken esistente
+// Migliora la gestione dei token CSRF
 export const getCsrfToken = async (forceRefresh = false) => {
-  const savedToken = localStorage.getItem('csrfToken');
+  // Prima cerca nella cache
+  const savedToken = CacheService.getCsrfToken();
   if (savedToken && !forceRefresh) return savedToken;
   
   try {
     console.log('Richiedo nuovo token CSRF');
     const token = localStorage.getItem('token');
     
-    // Usa l'URL corretto per il backend
-    const response = await axios.get(`${API_URL}/csrf`, {
-      headers: token ? { 'Authorization': `Bearer ${token}` } : {}
-    });
-    
-    if (response.data && response.data.token) {
-      setCsrfToken(response.data.token);
-      console.log('Ottenuto nuovo CSRF token:', response.data.token);
-      return response.data.token;
+    // Proteggi contro richieste simultanee
+    if (window.pendingCsrfRequest) {
+      console.log('Richiesta CSRF già in corso, attendere...');
+      try {
+        const result = await window.pendingCsrfRequest;
+        return result;
+      } catch (error) {
+        console.error('Errore nella richiesta CSRF pendente:', error);
+      }
     }
-    console.warn('Risposta CSRF senza token:', response.data);
-    return null;
+    
+    // Crea una Promise per gestire le richieste multiple
+    window.pendingCsrfRequest = (async () => {
+      try {
+        // Usa l'URL corretto per il backend
+        const response = await axios.get(`${API_URL}/csrf`, {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+          timeout: 10000 // 10 secondi timeout
+        });
+        
+        if (response.data && response.data.token) {
+          // Salva il token CSRF tramite CacheService
+          CacheService.saveCsrfToken(response.data.token);
+          console.log('Ottenuto nuovo CSRF token:', response.data.token);
+          return response.data.token;
+        }
+        
+        console.warn('Risposta CSRF senza token:', response.data);
+        return null;
+      } catch (error) {
+        console.error('Errore nel recupero del token CSRF:', error);
+        throw error;
+      } finally {
+        window.pendingCsrfRequest = null;
+      }
+    })();
+    
+    return await window.pendingCsrfRequest;
   } catch (error) {
     console.error('Errore nel recupero del token CSRF:', error);
+    
+    // Fallback: usa l'ultimo token salvato, anche se forceRefresh=true
+    const lastToken = localStorage.getItem('csrfToken');
+    if (lastToken) {
+      console.log('Usando ultimo token CSRF disponibile come fallback');
+      return lastToken;
+    }
+    
     return null;
   }
 };
@@ -117,15 +153,14 @@ export const getCsrfToken = async (forceRefresh = false) => {
  * @param {string} token - Token CSRF
  */
 export const setCsrfToken = (token) => {
-  csrfToken = token;
-  // Salva il token in localStorage per averlo disponibile tra i refresh
-  localStorage.setItem('csrfToken', token);
+  // Usa CacheService per salvare il token
+  CacheService.saveCsrfToken(token);
   console.log('Token CSRF salvato:', token);
 };
 
 // Aggiungi una funzione per ottenere il token salvato
 export const getSavedCsrfToken = () => {
-  return csrfToken || localStorage.getItem('csrfToken');
+  return CacheService.getCsrfToken();
 };
 
 // Funzione per ottenere un token CSRF valido
@@ -474,50 +509,75 @@ export const noteApi = {
         } catch (error) {
           // Se la richiesta in corso fallisce, continua con una nuova
           console.warn('Richiesta getNotes in corso fallita, provo nuovamente');
+          // Cancella la richiesta pendente per consentire un nuovo tentativo
+          window.pendingGetNotes = null;
         }
       }
     }
     
+    // Implementazione di backoff esponenziale per i tentativi
+    let retryCount = 0;
+    const maxRetries = 3;
+    const baseDelay = 1000; // 1 secondo
+
+    const executeRequest = async () => {
+      try {
+        // Codice esistente per ottenere il token CSRF e costruire l'URL
+        const csrfToken = localStorage.getItem('csrfToken');
+        let url;
+        
+        if (csrfToken) {
+          url = `/${csrfToken}/notes`;
+          console.log('Utilizzando URL con CSRF per getNotes');
+        } else {
+          url = '/api/v1/user/notes';
+          console.log('Utilizzando URL fallback per getNotes');
+        }
+        
+        const response = await axios.get(url);
+        
+        // Salva le note nella cache
+        if (response.data) {
+          CacheService.cacheNotes(response.data);
+        }
+        
+        return response.data;
+      } catch (error) {
+        console.error('Errore nel recupero delle note:', error);
+        
+        // Se siamo offline, usa la cache
+        if (!navigator.onLine) {
+          const cachedNotes = CacheService.getCachedNotes();
+          if (cachedNotes.length > 0) {
+            return cachedNotes;
+          }
+        }
+        
+        // Implementazione backoff esponenziale
+        if (retryCount < maxRetries) {
+          retryCount++;
+          const delay = Math.min(baseDelay * Math.pow(2, retryCount), 10000); // Max 10 secondi
+          console.log(`Riprovo getNotes tra ${delay}ms (tentativo ${retryCount}/${maxRetries})`);
+          
+          // Attendi prima di riprovare
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return executeRequest(); // Riprova ricorsivamente
+        }
+        
+        // Se tutti i tentativi falliscono, torna alla cache o rilancia l'errore
+        const cachedNotes = CacheService.getCachedNotes();
+        if (cachedNotes && cachedNotes.length > 0) {
+          console.log('Tutti i tentativi falliti, uso cache');
+          return cachedNotes;
+        }
+        
+        throw error;
+      }
+    };
+    
     // Throttle le richieste
     try {
-      window.pendingGetNotes = throttleApiCall(requestKey, async () => {
-        try {
-          // Codice esistente per ottenere il token CSRF e costruire l'URL
-          const csrfToken = localStorage.getItem('csrfToken');
-          let url;
-          
-          if (csrfToken) {
-            url = `/${csrfToken}/notes`;
-            console.log('Utilizzando URL con CSRF per getNotes');
-          } else {
-            url = '/api/v1/user/notes';
-            console.log('Utilizzando URL fallback per getNotes');
-          }
-          
-          const response = await axios.get(url);
-          
-          // Salva le note nella cache
-          if (response.data) {
-            CacheService.cacheNotes(response.data);
-          }
-          
-          return response.data;
-        } catch (error) {
-          console.error('Errore nel recupero delle note:', error);
-          
-          // Se siamo offline, usa la cache
-          if (!navigator.onLine) {
-            const cachedNotes = CacheService.getCachedNotes();
-            if (cachedNotes.length > 0) {
-              return cachedNotes;
-            }
-          }
-          
-          throw error;
-        } finally {
-          window.pendingGetNotes = null;
-        }
-      }, forceRefresh);
+      window.pendingGetNotes = throttleApiCall(requestKey, executeRequest, forceRefresh);
       
       return await window.pendingGetNotes;
     } catch (error) {
@@ -527,6 +587,9 @@ export const noteApi = {
         return CacheService.getCachedNotes();
       }
       throw error;
+    } finally {
+      // Assicurati di resettare sempre lo stato pendingGetNotes alla fine
+      window.pendingGetNotes = null;
     }
   },
   
@@ -640,57 +703,164 @@ export const noteApi = {
     // Crea una chiave univoca per questa richiesta
     const requestKey = `updateNote_${id}_${JSON.stringify(noteData)}`;
     
-    // Debounce per le richieste di aggiornamento (300ms)
-    const debouncedUpdate = debounce(async () => {
-      return dedupRequest(requestKey, async () => {
-        try {
-          // Codice esistente per l'aggiornamento della nota
-          const csrfToken = localStorage.getItem('csrfToken');
-          let url;
-          
-          if (csrfToken) {
-            url = `/${csrfToken}/notes/${id}`;
-          } else {
-            url = `/api/v1/user/notes/${id}`;
+    return dedupRequest(requestKey, async () => {
+      try {
+        // Verifica e limita la dimensione dei dati
+        if (noteData.content && typeof noteData.content === 'string' && noteData.content.length > 2000000) {
+          console.warn('Contenuto troppo grande per l\'invio al server, troncato a 2MB');
+          noteData.content = noteData.content.substring(0, 2000000);
+        }
+        
+        if (noteData.title && typeof noteData.title === 'string' && noteData.title.length > 255) {
+          console.warn('Titolo troppo lungo, troncato a 255 caratteri');
+          noteData.title = noteData.title.substring(0, 255);
+        }
+        
+        // Ottieni il token CSRF dalla cache
+        let csrfToken = CacheService.getCsrfToken();
+        
+        // Se non c'è un token CSRF, tenta di ottenerlo
+        if (!csrfToken) {
+          try {
+            csrfToken = await getCsrfToken(true);
+          } catch (csrfError) {
+            console.error('Errore nel recupero del token CSRF:', csrfError);
           }
-          
-          const response = await axios.put(url, noteData);
-          
-          // Aggiorna la cache
-          if (response.data) {
-            CacheService.updateNoteInCache(response.data);
-          }
-          
-          return response.data;
-        } catch (error) {
-          console.error('Errore nell\'aggiornamento della nota:', error);
-          
-          // Se siamo offline, aggiorna localmente
-          if (!navigator.onLine) {
-            // Ottieni la nota esistente dalla cache
-            const cachedNotes = CacheService.getCachedNotes();
-            const existingNote = cachedNotes.find(note => note.id === id);
+        }
+        
+        // Costruisci l'URL per la richiesta
+        let url;
+        if (csrfToken) {
+          url = `/${csrfToken}/notes/${id}`;
+        } else {
+          url = `/api/v1/user/notes/${id}`;
+          console.warn('Usando URL fallback senza CSRF token');
+        }
+        
+        console.log(`Aggiornamento nota ${id} con URL: ${url}`);
+        
+        // Sanitizza il contenuto prima dell'invio
+        if (noteData.content) {
+          noteData.content = CacheService.sanitizeHtml(noteData.content);
+        }
+        
+        // Aggiungi timestamp di aggiornamento se non presente
+        if (!noteData.updatedAt) {
+          noteData.updatedAt = new Date().toISOString();
+        }
+        
+        // Implementa un meccanismo di timeout e retry
+        const maxRetries = 2;
+        const timeout = 15000; // 15 secondi
+        
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+          try {
+            // Se non è il primo tentativo, aggiungiamo un ritardo esponenziale
+            if (attempt > 0) {
+              const delay = Math.pow(2, attempt) * 500; // 1s, 2s, 4s
+              console.log(`Tentativo ${attempt}/${maxRetries} dopo ${delay}ms...`);
+              await new Promise(resolve => setTimeout(resolve, delay));
+            }
             
-            if (existingNote) {
-              const updatedNote = {
-                ...existingNote,
-                ...noteData,
-                updatedAt: new Date().toISOString()
-              };
-              
-              // Aggiorna la cache
-              CacheService.updateNoteInCache(updatedNote);
-              
-              return updatedNote;
+            // Configura le opzioni della richiesta con timeout
+            const config = {
+              timeout: timeout,
+              headers: {
+                'Content-Type': 'application/json'
+              }
+            };
+            
+            // Esegui la richiesta di aggiornamento
+            const response = await axios.put(url, noteData, config);
+            
+            // Aggiorna la cache
+            if (response.data) {
+              CacheService.updateNoteInCache(response.data);
+            }
+            
+            return response.data;
+          } catch (error) {
+            // In caso di timeout o errore di rete, riprova
+            if (!error.response || error.code === 'ECONNABORTED') {
+              if (attempt < maxRetries) {
+                console.log('Timeout o errore di connessione, riprovo...');
+                continue;
+              }
+            }
+            
+            // In caso di errore 500, potrebbe essere un problema di CSRF
+            if (error.response && error.response.status === 500) {
+              // Solo sul primo errore 500, prova a ottenere un nuovo token CSRF
+              if (attempt === 0) {
+                try {
+                  console.log('Errore 500, provo a ottenere un nuovo token CSRF');
+                  await getCsrfToken(true);
+                  
+                  // Riprova con il nuovo token
+                  const newCsrfToken = CacheService.getCsrfToken();
+                  if (newCsrfToken) {
+                    const retryUrl = `/${newCsrfToken}/notes/${id}`;
+                    console.log(`Riprovo aggiornamento nota ${id} con nuovo token CSRF`);
+                    
+                    // Riprova con il nuovo URL ma con un timeout più lungo
+                    const retryResponse = await axios.put(retryUrl, noteData, {
+                      timeout: timeout * 1.5, // 50% più lungo
+                      headers: {
+                        'Content-Type': 'application/json'
+                      }
+                    });
+                    
+                    if (retryResponse.data) {
+                      CacheService.updateNoteInCache(retryResponse.data);
+                      return retryResponse.data;
+                    }
+                  }
+                } catch (retryError) {
+                  console.error('Errore nel secondo tentativo di aggiornamento:', retryError);
+                  // Se siamo all'ultimo tentativo, propaga l'errore
+                  if (attempt === maxRetries) throw retryError;
+                }
+              } else {
+                // Se errore 500 e non è il primo tentativo, propaga l'errore
+                throw error;
+              }
+            } else {
+              // Per altri errori di risposta (non 500), propaga subito
+              throw error;
             }
           }
-          
-          throw error;
         }
-      });
-    }, 300);
-    
-    return debouncedUpdate();
+        
+        // Se arriviamo qui, tutti i tentativi sono falliti
+        throw new Error('Tutti i tentativi di aggiornamento della nota sono falliti');
+      } catch (error) {
+        console.error('Errore nell\'aggiornamento della nota:', error);
+        
+        // Se siamo offline, aggiorna localmente
+        if (!navigator.onLine) {
+          // Ottieni la nota esistente dalla cache
+          const cachedNotes = CacheService.getCachedNotes();
+          const existingNote = cachedNotes.find(note => note.id === id);
+          
+          if (existingNote) {
+            const updatedNote = {
+              ...existingNote,
+              ...noteData,
+              updatedAt: new Date().toISOString(),
+              temporary: true
+            };
+            
+            // Aggiorna la cache
+            CacheService.updateNoteInCache(updatedNote);
+            
+            return updatedNote;
+          }
+        }
+        
+        // Se non possiamo gestire l'errore, propagalo
+        throw error;
+      }
+    });
   },
   
   deleteNote: async (id) => {

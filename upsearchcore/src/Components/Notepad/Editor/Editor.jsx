@@ -26,6 +26,8 @@ import './Editor.css'
 import { toast } from '../../../utils/notification'
 import api from '../../../utils/api'
 import { debounce } from 'lodash'
+import { CacheService } from '../../../utils/cache'
+import { noteApi } from '../../../utils/api'
 
 // Definizione dell'estensione FontSize
 export const FontSize = Extension.create({
@@ -89,6 +91,12 @@ const colorOptions = [
   '#039be5', '#3f51b5', '#7986cb', '#8e24aa', '#d81b60', '#ad1457',
   '#c0ca33', '#e4c441', '#fb8c00', '#fa573c', '#a52714', '#0097a7'
 ];
+
+// Costanti per la configurazione dell'autosalvataggio
+const AUTO_SAVE_INTERVAL = 60000; // 60 secondi
+const AUTO_SAVE_DEBOUNCE = 1000; // 1 secondo di debounce per le modifiche
+const SYNC_API_INTERVAL = 300000; // 5 minuti
+const RETRY_INTERVAL = 30000; // 30 secondi per riprovarci in caso di errore
 
 // Componente Editor
 const Editor = ({ onContentChange, initialContent, activeNote, onTitleChange, onContentStatusChange = () => {}, onSaveContent, readOnly = false }) => {
@@ -157,6 +165,17 @@ const Editor = ({ onContentChange, initialContent, activeNote, onTitleChange, on
   const inactivityTimerRef = useRef(null);
   const localChangesRef = useRef(null);
   const isTypingRef = useRef(false);
+  
+  // Aggiungi uno stato per la sincronizzazione
+  const syncTimerRef = useRef(null);
+  const retryTimerRef = useRef(null);
+  const [syncState, setSyncState] = useState({
+    lastSync: null,
+    syncInProgress: false,
+    pendingSync: false,
+    retryCount: 0,
+    offlineChanges: []
+  });
   
   // Configura l'editor e il salvataggio automatico all'avvio
   const editor = useEditor({
@@ -292,36 +311,43 @@ const Editor = ({ onContentChange, initialContent, activeNote, onTitleChange, on
       },
     },
     content: initialContent || '',
-    onUpdate: debounce(({ editor }) => {
-      if (!editor || editor.isEmpty) return;
+    onUpdate: ({ editor }) => {
+      if (!editor || editor.isEmpty || !activeNote) return;
       
       const newContent = editor.getHTML();
       
-      // Controlla se il contenuto è cambiato realmente
-      if (initialContent !== newContent) {
+      // Ignora gli aggiornamenti se il contenuto è uguale a quello già salvato
+      if (lastSavedContent === newContent) {
+        return;
+      }
+      
+      // Segna il momento dell'ultima modifica per tracciare l'attività dell'utente
+      lastChangeRef.current = new Date();
+      
+      // Verifica che il contenuto sia realmente cambiato rispetto all'ultima versione 
+      if (typeof newContent === 'string' && newContent !== '') {
         // Aggiorna lo stato locale
         setContentChanged(true);
         
-        // Notifica il componente parent del cambiamento
-        onContentChange(newContent);
+        // Indica che ci sono modifiche pendenti da salvare
+        setSaveState(prev => ({
+          ...prev,
+          pendingChanges: true
+        }));
         
-        // Imposta il timer per il salvataggio automatico dopo 1 minuto
-        if (autoSaveTimerRef.current) {
-          clearTimeout(autoSaveTimerRef.current);
+        // Notifica il componente parent del cambiamento
+        if (onContentChange) {
+          onContentChange(newContent);
         }
         
-        autoSaveTimerRef.current = setTimeout(() => {
-          // Salva solo se il contenuto è ancora cambiato
-          if (contentChanged) {
-            console.log('Salvataggio automatico dopo 1 minuto di inattività');
-            onContentStatusChange('saving');
-            onSaveContent(newContent); // Funzione di salvataggio
-            setContentChanged(false);
-            onContentStatusChange('saved');
-          }
-        }, 60000); // 1 minuto
+        // Aggiorna lo stato di modifica nel componente parent
+        if (onContentStatusChange) {
+          onContentStatusChange(true);
+        }
+        
+        console.log(`Contenuto editor modificato dall'utente: ${activeNote.id} - ${new Date().toISOString()}`);
       }
-    }, 500) // 500ms di debounce per le modifiche
+    }
   })
   
   // IMPORTANTE: Definisci queste funzioni dopo aver inizializzato l'editor
@@ -924,9 +950,9 @@ const Editor = ({ onContentChange, initialContent, activeNote, onTitleChange, on
     
     // Ora questa funzione si focalizza solo sugli aspetti dell'interazione utente
     const handleMobileInteraction = () => {
-      setHasInteracted(true)
-      setIsEditorFocused(true)
-      localStorage.setItem('editorHasInteracted', 'true')
+      setHasInteracted(true);
+      setIsEditorFocused(true);
+      localStorage.setItem('editorHasInteracted', 'true');
     };
     
     // Definisco un handler di selezione specifico per mobile
@@ -934,12 +960,12 @@ const Editor = ({ onContentChange, initialContent, activeNote, onTitleChange, on
       console.log("🔍 Editor selection change rilevato")
     };
     
-    editor.on('update', handleMobileInteraction)
-    editor.on('selectionUpdate', handleMobileSelectionChange)
+    editor.on('update', handleMobileInteraction);
+    editor.on('selectionUpdate', handleMobileSelectionChange);
     
     return () => {
-      editor.off('update', handleMobileInteraction)
-      editor.off('selectionUpdate', handleMobileSelectionChange)
+      editor.off('update', handleMobileInteraction);
+      editor.off('selectionUpdate', handleMobileSelectionChange);
     };
   }, [editor, isMobileDevice]);
   
@@ -1294,14 +1320,281 @@ const Editor = ({ onContentChange, initialContent, activeNote, onTitleChange, on
   
   // ... existing code ...
   
-  // Rimuovi o sostituisci funzioni problematiche come questa:
-  const handleMobileInteraction = () => {
-    setHasInteracted(true);
-    setIsEditorFocused(true);
-    localStorage.setItem('editorHasInteracted', 'true');
-  };
-  
-  // ... existing code ...
+  // Funzione per salvare automaticamente la bozza nel session storage
+  const saveToSessionStorage = useCallback((content) => {
+    if (!activeNote || !content) return;
+    
+    // Salva nel session storage
+    CacheService.saveDraft(activeNote.id, content);
+    
+    // Aggiorna lo stato di salvataggio
+    setSaveState(prev => ({
+      ...prev,
+      lastSaved: new Date(),
+      pendingChanges: true
+    }));
+    
+    console.log(`Bozza salvata in session storage per nota ${activeNote.id}`);
+  }, [activeNote]);
+
+  // Funzione debounced per gestire le modifiche del contenuto
+  const handleContentChange = useCallback(
+    debounce((newContent) => {
+      if (!activeNote) return;
+      
+      // Aggiorna lo stato changed solo se il contenuto è diverso dall'originale
+      const hasChanged = newContent !== lastSavedContent;
+      setContentChanged(hasChanged);
+      onContentStatusChange(hasChanged);
+      
+      // Notifica il componente parent
+      onContentChange(newContent);
+      
+      // Salva in session storage
+      saveToSessionStorage(newContent);
+      
+      // Aggiorna il riferimento dell'ultima modifica
+      lastChangeRef.current = new Date();
+    }, AUTO_SAVE_DEBOUNCE),
+    [activeNote, lastSavedContent, onContentChange, onContentStatusChange, saveToSessionStorage]
+  );
+
+  // Funzione per sincronizzare con il backend
+  const syncWithBackend = useCallback(async (force = false) => {
+    // Non sincronizzare se non ci sono modifiche o se è già in corso una sincronizzazione
+    if ((!force && !saveState.pendingChanges) || saveState.saveInProgress || !activeNote) {
+      return;
+    }
+    
+    // Aggiorna lo stato di sincronizzazione
+    setSaveState(prev => ({
+      ...prev,
+      saveInProgress: true
+    }));
+    
+    try {
+      console.log(`Sincronizzazione con il backend per nota ${activeNote.id}`);
+      
+      // Ottieni il contenuto corrente dell'editor
+      const content = editor ? editor.getHTML() : null;
+      if (!content) return;
+      
+      // Verifica se il contenuto ha già subito escape multipli
+      let contentToSave = content;
+      
+      // Invia la richiesta al backend
+      await noteApi.updateNote(activeNote.id, {
+        content: contentToSave,
+        updatedAt: new Date().toISOString()
+      });
+      
+      // Aggiorna lo stato dopo il successo
+      setSaveState({
+        lastSaved: new Date(),
+        saveInProgress: false,
+        pendingChanges: false,
+        retryCount: 0
+      });
+      
+      // Rimuovi la bozza dal session storage dopo il salvataggio riuscito
+      CacheService.removeDraft(activeNote.id);
+      
+      // Aggiorna la referenza del contenuto salvato
+      setLastSavedContent(content);
+      
+      console.log(`Nota ${activeNote.id} sincronizzata con successo`);
+      
+      // Notifica il componente parent che il contenuto è stato salvato
+      if (onSaveContent) {
+        onSaveContent(activeNote.id, content);
+      }
+    } catch (error) {
+      console.error(`Errore durante la sincronizzazione della nota ${activeNote?.id}:`, error);
+      
+      // Incrementa il contatore di tentativi e imposta lo stato
+      setSaveState(prev => ({
+        ...prev,
+        saveInProgress: false,
+        pendingChanges: true,
+        retryCount: prev.retryCount + 1
+      }));
+      
+      // Se offline, salva comunque nel session storage
+      if (!navigator.onLine) {
+        toast.info("Modifiche salvate localmente. Verranno sincronizzate automaticamente quando tornerai online.");
+      } else if (saveState.retryCount >= 3) {
+        // Dopo 3 tentativi falliti, mostra un messaggio all'utente
+        toast.warning("Impossibile salvare le modifiche sul server. I tuoi cambiamenti sono stati salvati localmente e verranno sincronizzati in seguito.");
+      }
+    }
+  }, [activeNote, editor, lastSavedContent, onSaveContent, saveState]);
+
+  // Configura il timer di salvataggio automatico
+  useEffect(() => {
+    if (!activeNote || !editor || readOnly) return;
+    
+    // Configura l'autosalvataggio periodico
+    autoSaveIntervalRef.current = setInterval(() => {
+        const content = editor.getHTML();
+      
+      // Verifica se ci sono modifiche non salvate
+        if (content !== lastSavedContent) {
+        saveToSessionStorage(content);
+      }
+    }, AUTO_SAVE_INTERVAL);
+    
+    // Configura il timer di sincronizzazione con il backend
+    syncTimerRef.current = setInterval(() => {
+      syncWithBackend();
+    }, SYNC_API_INTERVAL);
+    
+    // Cleanup
+    return () => {
+      if (autoSaveIntervalRef.current) {
+        clearInterval(autoSaveIntervalRef.current);
+      }
+      
+      if (syncTimerRef.current) {
+        clearInterval(syncTimerRef.current);
+      }
+      
+      if (retryTimerRef.current) {
+        clearTimeout(retryTimerRef.current);
+      }
+    };
+  }, [activeNote, editor, lastSavedContent, saveToSessionStorage, syncWithBackend, readOnly]);
+
+  // Aggiungi un event listener per quando la connessione viene ripristinata
+  useEffect(() => {
+    const handleOnline = () => {
+      console.log("Connessione ripristinata, sincronizzazione in corso...");
+      
+      // Tenta di sincronizzare immediatamente quando torniamo online
+      if (saveState.pendingChanges) {
+        syncWithBackend(true);
+      }
+    };
+    
+    window.addEventListener('online', handleOnline);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+    };
+  }, [saveState.pendingChanges, syncWithBackend]);
+
+  // Modifica l'useEffect per il caricamento della nota
+  useEffect(() => {
+    // Esegui solo se editor è definito
+    if (!editor) return;
+    
+    // Verifica se l'utente sta attivamente digitando o ha appena fatto modifiche
+    const isUserCurrentlyEditing = saveState.pendingChanges || (lastChangeRef.current && (new Date() - lastChangeRef.current) < 2000);
+    
+    // Se l'utente sta modificando il contenuto attivamente, non sovrascrivere le sue modifiche
+    if (isUserCurrentlyEditing) {
+      console.log('Utente sta attivamente modificando il contenuto, evito sovrascrittura');
+      return;
+    }
+    
+    // Quando activeNote cambia o quando non c'è activeNote, aggiorniamo l'editor
+    console.log('Aggiornamento editor con nota attiva:', activeNote?.id);
+    
+    if (!activeNote) {
+      // Se non c'è nessuna nota attiva, svuota l'editor
+      editor.commands.clearContent();
+      return;
+    }
+    
+    // Ottieni la bozza più recente dalla sessione
+    const draft = CacheService.getDraft(activeNote.id);
+    
+    // Determina quale contenuto usare
+    let contentToLoad = '';
+    
+    if (draft && draft.content) {
+      // Se esiste una bozza, usa il suo contenuto
+      contentToLoad = draft.content;
+      console.log('Caricata bozza per la nota:', activeNote.id);
+      
+      // Segnala che ci sono modifiche non salvate
+      setContentChanged(true);
+      onContentStatusChange(true);
+      
+      // Imposta lo stato di salvataggio
+      setSaveState(prev => ({
+        ...prev,
+        pendingChanges: true
+      }));
+    } else {
+      // Altrimenti usa il contenuto originale della nota
+      contentToLoad = activeNote.content || '';
+      console.log('Caricato contenuto originale per nota:', activeNote.id);
+      
+      // Resetta lo stato "modificato"
+      setContentChanged(false);
+      onContentStatusChange(false);
+      
+      // Resetta lo stato di salvataggio
+      setSaveState({
+        lastSaved: new Date(),
+        saveInProgress: false,
+        pendingChanges: false,
+        retryCount: 0
+      });
+    }
+    
+    // Verifica se il contenuto è già correttamente formattato come HTML
+    // o se contiene caratteri escaped che devono essere decodificati
+    if (contentToLoad.includes('&amp;lt;') || contentToLoad.includes('&lt;p')) {
+      // Tenta di correggere l'HTML con escape multipli
+      console.warn('Rilevato HTML con escape multipli. Tentativo di correzione...');
+      let fixedContent = contentToLoad;
+      // Applica decodifica fino a quando non ci sono più cambiamenti
+      let lastResult = '';
+      while (fixedContent !== lastResult) {
+        lastResult = fixedContent;
+        fixedContent = fixedContent
+          .replace(/&amp;/g, '&')
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/&quot;/g, '"')
+          .replace(/&#39;/g, "'");
+      }
+      contentToLoad = fixedContent;
+    }
+    
+    // Controlla se il contenuto dell'editor è già uguale a quello da caricare per evitare aggiornamenti inutili
+    const currentContent = editor.getHTML();
+    if (currentContent === contentToLoad) {
+      console.log('Il contenuto dell\'editor è già aggiornato, nessuna modifica necessaria');
+      return;
+    }
+    
+    // Memorizza l'ID della nota che stiamo caricando per evitare aggiornamenti incompleti
+    const noteIdBeingLoaded = activeNote.id;
+    
+    // Usa un timeout di 0ms per assicurarsi che il comando venga eseguito dopo il ciclo corrente di eventi
+    setTimeout(() => {
+      // Verifica che la nota attiva non sia cambiata durante l'esecuzione del timeout
+      if (activeNote && activeNote.id === noteIdBeingLoaded) {
+        // Imposta direttamente il contenuto nell'editor
+        try {
+          editor.commands.setContent(contentToLoad || '');
+          console.log('Contenuto editor aggiornato correttamente');
+          
+          // Salva il contenuto originale per confronto
+          setLastSavedContent(activeNote.content || '');
+          
+          // Esegui azioni aggiuntive quando si carica una nuova nota
+          editor.commands.focus('end'); // Posiziona il cursore alla fine del testo
+        } catch (error) {
+          console.error('Errore nell\'aggiornamento del contenuto dell\'editor:', error);
+        }
+      } else {
+        console.log('Nota attiva cambiata durante il caricamento, caricamento interrotto');
+      }
+    }, 0);
+  }, [editor, activeNote, onContentStatusChange]); // Dipendenza da activeNote, non da activeNote.id o activeNote.content
 
   // Migliora la gestione del drag and drop
   const handleEditorDrop = (e) => {
@@ -1329,119 +1622,36 @@ const Editor = ({ onContentChange, initialContent, activeNote, onTitleChange, on
     processFiles();
   };
 
-  // Aggiorna la gestione del contenuto
   useEffect(() => {
-    // Carica il contenuto iniziale se disponibile
-    if (initialContent && editor && !lastSavedContent) {
-      editor.commands.setContent(initialContent);
-      // Impostiamo anche il contenuto salvato iniziale
-      setLastSavedContent(initialContent);
+    // Rimuovo gli intervalli di autosalvataggio e sincronizzazione
+    if (autoSaveIntervalRef.current) {
+      clearInterval(autoSaveIntervalRef.current);
+      autoSaveIntervalRef.current = null;
     }
     
-    // Non impostare timer per il salvataggio automatico - l'utente deve salvare manualmente
-    
-    // Cleanup quando il componente viene smontato
-    return () => {
-      // Non salviamo automaticamente al server, ma salviamo la bozza in sessionStorage
-      if (editor && contentChanged && activeNote) {
-        const content = editor.getHTML();
-        if (content !== lastSavedContent) {
-          console.log('Salvataggio bozza temporanea al dismount del componente...');
-          try {
-            // Salva solo in sessionStorage, non chiama onContentChange
-            sessionStorage.setItem(`draft_${activeNote.id}`, JSON.stringify({
-              content,
-              timestamp: Date.now()
-            }));
-          } catch (error) {
-            console.error('Errore nel salvataggio della bozza:', error);
-          }
-        }
-      }
-    };
-  }, [editor, initialContent, lastSavedContent, contentChanged, activeNote]);
-
-  // Modifica l'useEffect per non salvare automaticamente
-  useEffect(() => {
-    // Nessun timer di autosave
-    
-    // Pulizia al momento dello smontaggio
-    return () => {
-      // Solo salvataggio di bozza in sessionStorage, non invio al server
-      if (activeNote && editor && contentChanged) {
-        console.log('Salvataggio bozza durante lo smontaggio');
-        try {
-          const content = editor.getHTML();
-          sessionStorage.setItem(`draft_${activeNote.id}`, JSON.stringify({
-            content,
-            timestamp: Date.now()
-          }));
-        } catch (error) {
-          console.error('Errore nel salvataggio bozza:', error);
-        }
-      }
-    };
-  }, [activeNote, editor, contentChanged]);
-
-  // Sostituisci la logica di setup dell'inactivity timer
-  const setupInactivityTimer = useCallback(() => {
-    // Usa una variabile per tracciare l'ultima modifica
-    let lastChangeTime = Date.now();
-    let inactivityTimer = null;
-    
-    const handleChange = () => {
-      // Aggiorna il timestamp dell'ultima modifica
-      lastChangeTime = Date.now();
-      
-      // Salva nel sessionStorage per riprendere in caso di chiusura improvvisa
-      if (activeNote && activeNote.id) {
-        try {
-          const content = editor.getHTML();
-          sessionStorage.setItem(`draft_${activeNote.id}`, JSON.stringify({
-            content,
-            timestamp: Date.now()
-          }));
-        } catch (error) {
-          console.error('Errore nel salvataggio draft:', error);
-        }
-      }
-      
-      // Resetta il timer di inattività
-      if (inactivityTimer) {
-        clearTimeout(inactivityTimer);
-      }
-      
-      // Non impostiamo più un timer per il salvataggio automatico
-      // Il salvataggio deve avvenire solo quando l'utente clicca il pulsante Salva
-    };
-    
-    return handleChange;
-  }, [activeNote, editor]);
-
-  // Aggiungi questo effetto per gestire il focus automatico quando il modale viene aperto
-  useEffect(() => {
-    if (showLinkModal && linkInputRef.current) {
-      setTimeout(() => {
-        linkInputRef.current.focus();
-      }, 100);
-    }
-  }, [showLinkModal]);
-
-  // Aggiungi questo useEffect per gestire il backdrop del modale
-  useEffect(() => {
-    if (showLinkModal) {
-      // Quando il modale è aperto, aggiungi una classe al body
-      document.body.classList.add('modal-backdrop-active');
-    } else {
-      // Quando il modale viene chiuso, rimuovi la classe
-      document.body.classList.remove('modal-backdrop-active');
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+      autoSaveTimeoutRef.current = null;
     }
     
-    // Cleanup quando il componente viene smontato
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+    
+    if (syncTimerRef.current) {
+      clearInterval(syncTimerRef.current);
+      syncTimerRef.current = null;
+    }
+    
     return () => {
-      document.body.classList.remove('modal-backdrop-active');
+      // Cleanup all intervals
+      if (autoSaveIntervalRef.current) clearInterval(autoSaveIntervalRef.current);
+      if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current);
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+      if (syncTimerRef.current) clearInterval(syncTimerRef.current);
     };
-  }, [showLinkModal]);
+  }, []);
 
   return (
     <div className={`editor-container d-flex flex-column h-100 ${isMobileDevice ? 'mobile-mode' : ''} ${isKeyboardVisible ? 'keyboard-visible' : ''}`}>

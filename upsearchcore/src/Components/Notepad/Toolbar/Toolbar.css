@@ -160,6 +160,7 @@
   display: flex;
   align-items: center;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  white-space: nowrap;
 }
 
 .tag:hover {
@@ -208,7 +209,22 @@
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 4px;
+  margin-bottom: 8px;
   transition: opacity 0.3s ease;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  padding-bottom: 5px;
+  min-height: 36px;
+}
+
+.tags-container::-webkit-scrollbar {
+  height: 4px;
+}
+
+.tags-container::-webkit-scrollbar-thumb {
+  background-color: var(--scroll-thumb, rgba(0, 0, 0, 0.2));
+  border-radius: 2px;
 }
 
 .toolbar-actions {
@@ -239,13 +255,13 @@
 /* Ottimizzazione per mobile */
 @media (max-width: 767px) {
   .toolbar {
-    padding: 12px 10px;
+    padding: 10px 8px;
   }
   
   .toolbar-row {
     flex-direction: column;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     width: 100%;
   }
   
@@ -257,39 +273,61 @@
   }
   
   .note-title-input {
-    font-size: 1.2rem;
+    font-size: 1.1rem;
     margin-bottom: 6px;
     width: 100%;
     text-align: center;
+    padding: 6px;
   }
   
   .toolbar-right {
     width: 100%;
-    justify-content: center;
+    justify-content: space-around;
     flex-wrap: wrap;
+    margin-top: 5px;
   }
   
   .toolbar-actions {
     width: 100%;
-    justify-content: center;
+    justify-content: space-around;
     padding: 3px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    gap: 2px;
+  }
+  
+  .toolbar-actions::-webkit-scrollbar {
+    height: 3px;
+  }
+  
+  .toolbar-actions::-webkit-scrollbar-thumb {
+    background-color: var(--scroll-thumb, rgba(0, 0, 0, 0.2));
+    border-radius: 1.5px;
   }
   
   .toolbar-btn {
-    width: 36px;
-    height: 36px;
-    padding: 6px;
+    width: 34px;
+    height: 34px;
+    padding: 5px;
+    flex-shrink: 0;
   }
   
   .tags-container {
-    justify-content: center;
+    justify-content: flex-start;
     width: 100%;
-    margin-top: 8px;
+    margin: 10px 0;
+    padding: 5px 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    display: flex;
+    flex-wrap: nowrap;
   }
   
   .tag {
     padding: 3px 10px;
     font-size: 0.75rem;
+    flex-shrink: 0;
   }
   
   .tag-input {
@@ -302,6 +340,24 @@
     display: flex;
     justify-content: center;
     margin-top: 6px;
+  }
+  
+  /* Ottimizzazione per telefoni in orientamento verticale */
+  @media (max-width: 480px) {
+    .toolbar-btn {
+      width: 32px;
+      height: 32px;
+      padding: 4px;
+    }
+    
+    .toolbar-actions {
+      padding: 2px;
+    }
+    
+    .tag {
+      padding: 2px 8px;
+      font-size: 0.7rem;
+    }
   }
 }
 

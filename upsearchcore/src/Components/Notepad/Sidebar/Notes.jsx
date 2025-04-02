@@ -30,9 +30,17 @@ const Notes = ({ notes, activeNoteId, onNoteSelect, onCreateNote }) => {
   }
   
   const handleNoteClick = (id) => {
-    console.log(`Selezionata nota con ID: ${id}`);
-    onNoteSelect(id);
-    navigate(`/note/${id}`);
+    console.log(`Selezionata nota con ID: ${id} nel componente Notes`);
+    
+    // Verifica che onNoteSelect sia una funzione valida prima di chiamarla
+    if (typeof onNoteSelect === 'function') {
+      onNoteSelect(id);
+      console.log(`Callback onNoteSelect eseguita con id: ${id}`);
+    } else {
+      console.error('onNoteSelect non è una funzione valida');
+      // Fallback di navigazione se la callback non è disponibile
+      navigate(`/note/${id}`);
+    }
   }
   
   // Trova tutte le note di primo livello o note senza parent
