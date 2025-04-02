@@ -7,18 +7,77 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dipendenze
 node_modules
+/.pnp
+.pnp.js
+
+# Build
 dist
 dist-ssr
+build
+
+# File locali
 *.local
+.DS_Store
+
+# Variabili d'ambiente e configurazioni
+.env
+.env.*
+.env.local
+.env.development
+.env.development.local
+.env.test
+.env.test.local
+.env.production
+.env.production.local
+.env.staging
+.env.staging.local
+
+# Cache
+.cache
+.cache/
+.eslintcache
+.npm
+.vite
+vite.config.js.timestamp-*
+
+# Certificati SSL locali
+*.pem
+*.key
+*.crt
+
+# Coverage e test
+coverage
+.nyc_output
+.jest-cache
+/cypress/videos/
+/cypress/screenshots/
 
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
 .idea
-.DS_Store
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+
+# Dati temporanei
+.temp
+.tmp
+.vercel
+.netlify
+
+# Backup
+*.bak
+*.backup
+*~
+
+# Debug e profiling
+.prof
+.prettierignore

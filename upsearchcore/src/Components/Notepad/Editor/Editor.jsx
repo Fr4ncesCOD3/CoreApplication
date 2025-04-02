@@ -17,7 +17,7 @@ import TextStyle from '@tiptap/extension-text-style'
 import Placeholder from '@tiptap/extension-placeholder'
 import TextAlign from '@tiptap/extension-text-align'
 import { Button, ButtonGroup, ButtonToolbar, Dropdown, Form, Modal, OverlayTrigger, Popover, Tooltip } from 'react-bootstrap'
-import { FiBold, FiItalic, FiCode, FiType, FiList, FiLink, FiX, FiDroplet, FiUnderline, FiMessageSquare, FiAlignLeft, FiAlignCenter, FiAlignRight, FiTrash2, FiHash, FiEdit3, FiFile } from 'react-icons/fi'
+import { FiBold, FiItalic, FiCode, FiType, FiList, FiLink, FiX, FiDroplet, FiUnderline, FiMessageSquare, FiAlignLeft, FiAlignCenter, FiAlignRight, FiTrash2, FiHash, FiEdit3, FiFile, FiMinimize2, FiMaximize2, FiDownload } from 'react-icons/fi'
 import { MdFormatSize, MdArrowDropDown, MdFormatColorText } from 'react-icons/md'
 import { IoColorPaletteOutline } from 'react-icons/io5'
 import DrawingNode from './DrawingNode'
@@ -25,16 +25,7 @@ import DocumentNode from './DocumentNode'
 import './Editor.css'
 import { toast } from '../../../utils/notification'
 import api from '../../../utils/api'
-
-// Funzione di utilità per il debounce
-function debounce(func, wait) {
-  let timeout;
-  return function(...args) {
-    const context = this;
-    clearTimeout(timeout);
-    timeout = setTimeout(() => func.apply(context, args), wait);
-  };
-}
+import { debounce } from 'lodash'
 
 // Definizione dell'estensione FontSize
 export const FontSize = Extension.create({
@@ -100,7 +91,7 @@ const colorOptions = [
 ];
 
 // Componente Editor
-const Editor = ({ onContentChange, initialContent, activeNote, onTitleChange, onContentStatusChange = () => {} }) => {
+const Editor = ({ onContentChange, initialContent, activeNote, onTitleChange, onContentStatusChange = () => {}, onSaveContent, readOnly = false }) => {
   // Stati per gestire i vari aspetti dell'editor
   const [showLinkModal, setShowLinkModal] = useState(false)
   const [linkUrl, setLinkUrl] = useState('')
@@ -161,6 +152,11 @@ const Editor = ({ onContentChange, initialContent, activeNote, onTitleChange, on
     pendingChanges: false,
     retryCount: 0
   });
+  
+  // Aggiungi questi ref per gestire l'inattività
+  const inactivityTimerRef = useRef(null);
+  const localChangesRef = useRef(null);
+  const isTypingRef = useRef(false);
   
   // Configura l'editor e il salvataggio automatico all'avvio
   const editor = useEditor({
@@ -296,16 +292,36 @@ const Editor = ({ onContentChange, initialContent, activeNote, onTitleChange, on
       },
     },
     content: initialContent || '',
-    onUpdate: (props) => {
-      if (props.editor) {
-        const currentContent = props.editor.getHTML();
-        if (onContentChange) {
-          onContentChange(currentContent);
+    onUpdate: debounce(({ editor }) => {
+      if (!editor || editor.isEmpty) return;
+      
+      const newContent = editor.getHTML();
+      
+      // Controlla se il contenuto è cambiato realmente
+      if (initialContent !== newContent) {
+        // Aggiorna lo stato locale
+        setContentChanged(true);
+        
+        // Notifica il componente parent del cambiamento
+        onContentChange(newContent);
+        
+        // Imposta il timer per il salvataggio automatico dopo 1 minuto
+        if (autoSaveTimerRef.current) {
+          clearTimeout(autoSaveTimerRef.current);
         }
+        
+        autoSaveTimerRef.current = setTimeout(() => {
+          // Salva solo se il contenuto è ancora cambiato
+          if (contentChanged) {
+            console.log('Salvataggio automatico dopo 1 minuto di inattività');
+            onContentStatusChange('saving');
+            onSaveContent(newContent); // Funzione di salvataggio
+            setContentChanged(false);
+            onContentStatusChange('saved');
+          }
+        }, 60000); // 1 minuto
       }
-    },
-    autofocus: false,
-    editable: true,
+    }, 500) // 500ms di debounce per le modifiche
   })
   
   // IMPORTANTE: Definisci queste funzioni dopo aver inizializzato l'editor
@@ -408,53 +424,35 @@ const Editor = ({ onContentChange, initialContent, activeNote, onTitleChange, on
   
   // Gestione dell'inserimento dei link
   const handleSetLink = useCallback(() => {
-    if (!editor) return
-    
-    const previousUrl = editor.getAttributes('link').href
-    setLinkUrl(previousUrl || '')
+    if (editor && editor.isActive('link')) {
+      editor.chain().focus().unsetLink().run()
+      return
+    }
+
+    setLinkUrl('')
     setShowLinkModal(true)
-    
-    // Focus sull'input URL quando il modale si apre
-    setTimeout(() => {
-      if (linkInputRef.current) {
-        linkInputRef.current.focus()
-      }
-    }, 100)
   }, [editor])
   
   // Applicazione del link al testo selezionato
-  const applyLink = useCallback(() => {
-    if (!editor) return
+  const applyLink = useCallback((e) => {
+    if (e) e.preventDefault();
     
     // Validazione dell'URL
-    const isValidUrl = /^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([/\w .-]*)*\/?$/.test(linkUrl)
-    
-    if (linkUrl && isValidUrl) {
-      // Assicurati che l'URL abbia il protocollo
-      const url = linkUrl.startsWith('http') ? linkUrl : `https://${linkUrl}`
+    if (linkUrl) {
+      const url = linkUrl.trim();
+      let finalUrl = url;
       
-      editor
-        .chain()
-        .focus()
-        .extendMarkRange('link')
-        .setLink({ href: url })
-        .run()
-    } else if (linkUrl) {
-      // Se l'URL non è valido, mostra un avviso
-      alert('Per favore, inserisci un URL valido')
-      return
-    } else {
-      // Se l'URL è vuoto, rimuovi il link
-      editor
-        .chain()
-        .focus()
-        .extendMarkRange('link')
-        .unsetLink()
-        .run()
+      // Assicurati che l'URL sia completo
+      if (!/^https?:\/\//i.test(url) && !url.startsWith('/') && !url.startsWith('#')) {
+        finalUrl = `https://${url}`;
+      }
+      
+      if (editor) {
+        editor.chain().focus().setLink({ href: finalUrl }).run();
+      }
     }
     
-    setShowLinkModal(false)
-    setLinkUrl('')
+    setShowLinkModal(false);
   }, [editor, linkUrl])
   
   // Modifica la funzione applyFontSize per salvare la dimensione corrente
@@ -576,11 +574,14 @@ const Editor = ({ onContentChange, initialContent, activeNote, onTitleChange, on
   }
   
   // Modifica la funzione handleFontSizeInput per evitare manipolazioni DOM dirette
-  const handleFontSizeInput = (e) => {
+  const handleFontSizeInput = useCallback((e) => {
     const newSize = parseInt(e.target.value, 10);
     setFontSize(newSize);
     
     if (!editor) return;
+    
+    // Limitiamo le chiamate a modifiche significative
+    if (Math.abs(newSize - fontSize) < 2) return;
     
     // Salva la dimensione corrente per il testo futuro
     document.body.style.setProperty('--current-font-size', `${newSize}px`);
@@ -595,7 +596,7 @@ const Editor = ({ onContentChange, initialContent, activeNote, onTitleChange, on
       .focus()
       .setMark('textStyle', { fontSize: `${newSize}px` })
       .run();
-  };
+  }, [editor, fontSize]);
   
   // Sostituisci la funzione setupParagraphHandler con questa versione più sicura
   const setupParagraphHandler = () => {
@@ -642,9 +643,13 @@ const Editor = ({ onContentChange, initialContent, activeNote, onTitleChange, on
   useEffect(() => {
     if (!editor) return;
     
+    // Usiamo una ref per tenere traccia della dimensione corrente
+    const fontSizeRef = { value: editor.storage.fontSize || 16 };
+    
     // Crea un osservatore per le mutazioni DOM con debounce
     const debouncedUpdate = debounce(() => {
-      const currentFontSize = editor.storage.fontSize || 16;
+      // Usa il valore della ref anziché accedere allo state
+      const currentFontSize = fontSizeRef.value;
       
       // Applica la dimensione del testo in modo sicuro
       if (editor && editor.isActive) {
@@ -654,34 +659,48 @@ const Editor = ({ onContentChange, initialContent, activeNote, onTitleChange, on
           .setMark('textStyle', { fontSize: `${currentFontSize}px` })
           .run();
       }
-    }, 50); // Piccolo ritardo per evitare troppe chiamate
+    }, 150); // Aumento il ritardo per ridurre le chiamate
     
     const observer = new MutationObserver((mutations) => {
       let needsUpdate = false;
       
-      mutations.forEach(mutation => {
+      // Verifica solo alcune mutazioni specifiche per ridurre gli aggiornamenti
+      for (const mutation of mutations) {
         if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+          // Verifica se gli elementi aggiunti sono paragrafi vuoti o simili
+          for (const node of mutation.addedNodes) {
+            if (node.nodeType === 1 && ['P', 'H1', 'H2', 'H3', 'LI'].includes(node.nodeName)) {
           needsUpdate = true;
+              break;
+            }
+          }
         }
-      });
+        
+        if (needsUpdate) break;
+      }
       
       if (needsUpdate) {
         debouncedUpdate();
       }
     });
     
-    // Configura l'osservatore con opzioni ottimizzate
+    // Configura l'osservatore con opzioni molto limitate
     observer.observe(editor.view.dom, {
       childList: true,
       subtree: true,
-      attributes: false // Riduci il carico osservando solo i cambiamenti nella struttura
+      attributes: false, // Ignora i cambiamenti degli attributi
+      characterData: false // Ignora i cambiamenti del testo
     });
+    
+    // Aggiorniamo la ref quando cambia lo state
+    fontSizeRef.value = fontSize;
     
     // Cleanup
     return () => {
       observer.disconnect();
+      debouncedUpdate.cancel(); // Cancella eventuali chiamate in sospeso
     };
-  }, [editor]);
+  }, [editor, fontSize]);
   
   // Aggiungi un gestore per il focus sui paragrafi
   const setupParagraphFocusHandler = () => {
@@ -724,31 +743,29 @@ const Editor = ({ onContentChange, initialContent, activeNote, onTitleChange, on
   
   // Aggiungi questo effetto per rilevare i dispositivi mobili
   useEffect(() => {
+    const isMobileRef = { value: window.innerWidth <= 767 };
+    
     const checkMobileDevice = () => {
-      const isMobile = window.innerWidth <= 768;
+      const isMobile = window.innerWidth <= 767;
+      if (isMobile !== isMobileRef.value) {
+        isMobileRef.value = isMobile;
       setIsMobileDevice(isMobile);
-      
-      // Applica classi specifiche per mobile al container dell'editor
-      if (editor) {
-        const editorElement = editor.view.dom;
-        if (isMobile) {
-          editorElement.classList.add('mobile-editor');
-        } else {
-          editorElement.classList.remove('mobile-editor');
-        }
       }
     };
     
-    // Controlla all'inizio
+    // Inizializza
     checkMobileDevice();
     
-    // Aggiungi listener per il resize della finestra
-    window.addEventListener('resize', checkMobileDevice);
+    // Usa un evento debounced per evitare troppi aggiornamenti
+    const handleResize = debounce(checkMobileDevice, 250);
+    
+    window.addEventListener('resize', handleResize);
     
     return () => {
-      window.removeEventListener('resize', checkMobileDevice);
+      window.removeEventListener('resize', handleResize);
+      handleResize.cancel();
     };
-  }, [editor]);
+  }, []);
   
   // Variabile per tracciare i tap
   let lastTap = 0;
@@ -1315,115 +1332,116 @@ const Editor = ({ onContentChange, initialContent, activeNote, onTitleChange, on
   // Aggiorna la gestione del contenuto
   useEffect(() => {
     // Carica il contenuto iniziale se disponibile
-    if (initialContent && editor) {
+    if (initialContent && editor && !lastSavedContent) {
       editor.commands.setContent(initialContent);
+      // Impostiamo anche il contenuto salvato iniziale
+      setLastSavedContent(initialContent);
     }
     
-    // Configura il salvataggio automatico ogni 2 minuti
-    const saveInterval = setInterval(() => {
-      if (editor) {
+    // Non impostare timer per il salvataggio automatico - l'utente deve salvare manualmente
+    
+    // Cleanup quando il componente viene smontato
+    return () => {
+      // Non salviamo automaticamente al server, ma salviamo la bozza in sessionStorage
+      if (editor && contentChanged && activeNote) {
         const content = editor.getHTML();
-        onContentChange(content);
-        console.log('Contenuto editor salvato automaticamente');
+        if (content !== lastSavedContent) {
+          console.log('Salvataggio bozza temporanea al dismount del componente...');
+          try {
+            // Salva solo in sessionStorage, non chiama onContentChange
+            sessionStorage.setItem(`draft_${activeNote.id}`, JSON.stringify({
+              content,
+              timestamp: Date.now()
+            }));
+          } catch (error) {
+            console.error('Errore nel salvataggio della bozza:', error);
+          }
+        }
       }
-    }, 120000); // 2 minuti
-    
-    return () => {
-      clearInterval(saveInterval);
     };
-  }, [editor, initialContent, onContentChange]);
+  }, [editor, initialContent, lastSavedContent, contentChanged, activeNote]);
 
-  // Funzione di salvataggio con buffer e retry
-  const saveContent = async (content, force = false) => {
-    // Aggiorna il buffer con il contenuto più recente
-    setSaveBuffer(content);
-    setSaveState(prev => ({ ...prev, pendingChanges: true }));
-    
-    // Se c'è già un salvataggio in corso, non fare nulla (il buffer contiene già l'ultimo contenuto)
-    if (saveState.saveInProgress && !force) {
-      return;
-    }
-    
-    // Se il tempo dall'ultimo salvataggio è troppo breve e non è forzato, aspetta
-    if (!force && saveState.lastSaved) {
-      const timeSinceLastSave = Date.now() - saveState.lastSaved;
-      if (timeSinceLastSave < 5000) { // Minimo 5 secondi tra i salvataggi consecutivi
-        return;
-      }
-    }
-    
-    // Inizia il processo di salvataggio
-    setSaveState(prev => ({ ...prev, saveInProgress: true }));
-    
-    try {
-      // Recupera il contenuto attuale dal buffer
-      const contentToSave = saveBuffer;
-      
-      // Effettua la richiesta di salvataggio
-      await api.post('/api/notes/save', {
-        id: currentNote.id, 
-        content: contentToSave
-      });
-      
-      // Aggiorna lo stato dopo il salvataggio riuscito
-      setSaveState({
-        lastSaved: Date.now(),
-        saveInProgress: false,
-        pendingChanges: false,
-        retryCount: 0
-      });
-      
-      // Mostra notifica solo se è un salvataggio forzato (manuale)
-      if (force) {
-        toast.success('Contenuto salvato con successo');
-      }
-    } catch (error) {
-      console.error('Errore durante il salvataggio:', error);
-      
-      // Incrementa il contatore di tentativi
-      const newRetryCount = saveState.retryCount + 1;
-      
-      // Aggiorna lo stato
-      setSaveState(prev => ({
-        ...prev, 
-        saveInProgress: false,
-        retryCount: newRetryCount
-      }));
-      
-      // Se era un salvataggio manuale, mostra un errore
-      if (force) {
-        toast.error('Errore durante il salvataggio. Riproveremo automaticamente.');
-      }
-      
-      // Calcola il ritardo per il prossimo tentativo (backoff esponenziale)
-      const retryDelay = Math.min(30000, 2000 * Math.pow(2, newRetryCount));
-      
-      // Pianifica un nuovo tentativo
-      setTimeout(() => saveContent(saveBuffer, true), retryDelay);
-    }
-  };
-
-  // Configura il salvataggio automatico periodico
+  // Modifica l'useEffect per non salvare automaticamente
   useEffect(() => {
-    // Verifica ogni 30 secondi se ci sono modifiche in attesa
-    const checkInterval = setInterval(() => {
-      if (saveState.pendingChanges && !saveState.saveInProgress) {
-        saveContent(saveBuffer, false);
-      }
-    }, 30000);
+    // Nessun timer di autosave
     
-    // Ogni 2 minuti, forza un salvataggio se ci sono modifiche
-    const saveInterval = setInterval(() => {
-      if (saveBuffer && saveState.pendingChanges) {
-        saveContent(saveBuffer, true);
-      }
-    }, 120000);
-    
+    // Pulizia al momento dello smontaggio
     return () => {
-      clearInterval(checkInterval);
-      clearInterval(saveInterval);
+      // Solo salvataggio di bozza in sessionStorage, non invio al server
+      if (activeNote && editor && contentChanged) {
+        console.log('Salvataggio bozza durante lo smontaggio');
+        try {
+          const content = editor.getHTML();
+          sessionStorage.setItem(`draft_${activeNote.id}`, JSON.stringify({
+            content,
+            timestamp: Date.now()
+          }));
+        } catch (error) {
+          console.error('Errore nel salvataggio bozza:', error);
+        }
+      }
     };
-  }, [saveBuffer, saveState]);
+  }, [activeNote, editor, contentChanged]);
+
+  // Sostituisci la logica di setup dell'inactivity timer
+  const setupInactivityTimer = useCallback(() => {
+    // Usa una variabile per tracciare l'ultima modifica
+    let lastChangeTime = Date.now();
+    let inactivityTimer = null;
+    
+    const handleChange = () => {
+      // Aggiorna il timestamp dell'ultima modifica
+      lastChangeTime = Date.now();
+      
+      // Salva nel sessionStorage per riprendere in caso di chiusura improvvisa
+      if (activeNote && activeNote.id) {
+        try {
+          const content = editor.getHTML();
+          sessionStorage.setItem(`draft_${activeNote.id}`, JSON.stringify({
+            content,
+            timestamp: Date.now()
+          }));
+        } catch (error) {
+          console.error('Errore nel salvataggio draft:', error);
+        }
+      }
+      
+      // Resetta il timer di inattività
+      if (inactivityTimer) {
+        clearTimeout(inactivityTimer);
+      }
+      
+      // Non impostiamo più un timer per il salvataggio automatico
+      // Il salvataggio deve avvenire solo quando l'utente clicca il pulsante Salva
+    };
+    
+    return handleChange;
+  }, [activeNote, editor]);
+
+  // Aggiungi questo effetto per gestire il focus automatico quando il modale viene aperto
+  useEffect(() => {
+    if (showLinkModal && linkInputRef.current) {
+      setTimeout(() => {
+        linkInputRef.current.focus();
+      }, 100);
+    }
+  }, [showLinkModal]);
+
+  // Aggiungi questo useEffect per gestire il backdrop del modale
+  useEffect(() => {
+    if (showLinkModal) {
+      // Quando il modale è aperto, aggiungi una classe al body
+      document.body.classList.add('modal-backdrop-active');
+    } else {
+      // Quando il modale viene chiuso, rimuovi la classe
+      document.body.classList.remove('modal-backdrop-active');
+    }
+    
+    // Cleanup quando il componente viene smontato
+    return () => {
+      document.body.classList.remove('modal-backdrop-active');
+    };
+  }, [showLinkModal]);
 
   return (
     <div className={`editor-container d-flex flex-column h-100 ${isMobileDevice ? 'mobile-mode' : ''} ${isKeyboardVisible ? 'keyboard-visible' : ''}`}>
@@ -1710,24 +1728,33 @@ const Editor = ({ onContentChange, initialContent, activeNote, onTitleChange, on
       </div>
       
       {/* Modale per l'inserimento sicuro dei link */}
-      <Modal show={showLinkModal} onHide={() => setShowLinkModal(false)} centered>
+      <Modal 
+        show={showLinkModal} 
+        onHide={() => setShowLinkModal(false)}
+        centered
+        className="link-modal"
+        backdropClassName="link-modal-backdrop"
+        animation={true}
+        autoFocus={false}
+      >
         <Modal.Header closeButton>
-          <Modal.Title>Inserisci Link</Modal.Title>
+          <Modal.Title>Inserisci link</Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          <Form>
-            <Form.Group className="mb-3">
+          <Form onSubmit={applyLink}>
+            <Form.Group className="mb-3 url-input">
               <Form.Label>URL</Form.Label>
               <Form.Control
                 type="text"
-                placeholder="https://esempio.com"
                 value={linkUrl}
                 onChange={(e) => setLinkUrl(e.target.value)}
-                pattern="^(https?:\/\/)?([\da-z.-]+)\.([a-z.]{2,6})([/\w .-]*)*\/?$"
+                placeholder="https://example.com"
                 ref={linkInputRef}
+                className="url-control"
+                pattern="^(https?:\/\/)?([\w-]+(\.[\w-]+)+|localhost)(:\d+)?(\/[^\s]*)$"
               />
               <Form.Text className="text-muted">
-                Inserisci un URL valido per sicurezza.
+                Includi 'https://' per i link esterni. I link interni possono iniziare con '/' o '#'.
               </Form.Text>
             </Form.Group>
           </Form>
@@ -1737,7 +1764,7 @@ const Editor = ({ onContentChange, initialContent, activeNote, onTitleChange, on
             Annulla
           </Button>
           <Button variant="primary" onClick={applyLink}>
-            Inserisci Link
+            Inserisci
           </Button>
         </Modal.Footer>
       </Modal>

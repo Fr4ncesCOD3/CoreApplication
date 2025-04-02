@@ -1,12 +1,55 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd'
-import { FiSearch, FiPlus, FiMoon, FiSun, FiChevronDown, FiChevronRight, FiTrash2, FiX } from 'react-icons/fi'
-import { InputGroup, Form, Button } from 'react-bootstrap'
+import { FiSearch, FiPlus, FiMoon, FiSun, FiChevronDown, FiChevronRight, FiTrash2, FiX, FiClock } from 'react-icons/fi'
+import { InputGroup, Form, Button, Spinner } from 'react-bootstrap'
 import './Sidebar.css'
-import { noteApi } from '../../../utils/api'
+import { noteApi, getCsrfToken } from '../../../utils/api'
 import { toast } from '../../../utils/notification'
 import Notes from './Notes'
+
+// Funzione di utility per estrarre testo da HTML
+const stripHtml = (html) => {
+  if (!html) return '';
+  const tmp = document.createElement('div');
+  tmp.innerHTML = html;
+  return tmp.textContent || tmp.innerText || '';
+};
+
+// Funzione per generare un'anteprima del contenuto
+const generateContentPreview = (content, maxLength = 80) => {
+  if (!content) return '';
+  const textContent = stripHtml(content);
+  return textContent.length > maxLength 
+    ? textContent.substring(0, maxLength) + '...' 
+    : textContent;
+};
+
+// Funzione per formattare la data
+const formatDate = (dateString) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  
+  // Controlla se la data è oggi
+  const today = new Date();
+  const isToday = date.getDate() === today.getDate() && 
+                 date.getMonth() === today.getMonth() && 
+                 date.getFullYear() === today.getFullYear();
+  
+  if (isToday) {
+    return date.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+  }
+  
+  // Se è negli ultimi 7 giorni, mostra il giorno della settimana
+  const daysDiff = Math.floor((today - date) / (1000 * 60 * 60 * 24));
+  if (daysDiff < 7) {
+    return date.toLocaleDateString('it-IT', { weekday: 'short' }) + ' ' + 
+           date.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+  }
+  
+  // Altrimenti mostra la data completa
+  return date.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: '2-digit' });
+};
 
 const Sidebar = ({ 
   notes = [], 
@@ -27,6 +70,22 @@ const Sidebar = ({
   const [filteredNotes, setFilteredNotes] = useState([])
   const [loading, setLoading] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
+  const [creatingNote, setCreatingNote] = useState(false)
+  
+  // Funzione helper per verificare i tag tutorial - spostala prima del suo utilizzo
+  const hasTutorialTag = (tags) => {
+    if (!tags) return false;
+    
+    if (Array.isArray(tags)) {
+      return tags.some(tag => ['tutorial', 'benvenuto'].includes(tag));
+    }
+    
+    if (typeof tags === 'string') {
+      return tags.includes('tutorial') || tags.includes('benvenuto');
+    }
+    
+    return false;
+  };
   
   // Sincronizza searchTerm con searchQuery proveniente da Notepad
   useEffect(() => {
@@ -35,81 +94,111 @@ const Sidebar = ({
     }
   }, [searchQuery]);
   
-  // Aggiorna questo useEffect per filtrare per utente e ordinare meglio le note
-  useEffect(() => {
-    // Ottieni info utente
-    const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-    const userId = currentUser?.id;
+  // Aggiungi una memoria delle note filtrate per prevenire calcoli ripetuti
+  const memoizedFilterNotes = useCallback((notes, searchTerm, currentUser) => {
+    // Crea una chiave unica per questa combinazione di input
+    const key = `${searchTerm}_${notes.length}_${currentUser?.id || 'guest'}`;
     
-    if (!userId) {
-      console.warn('Nessun utente autenticato, impossibile filtrare le note');
-      setFilteredNotes([]);
-      return;
+    // Controlla se abbiamo già calcolato questo risultato
+    if (window.filteredNotesCache && window.filteredNotesCache[key]) {
+      console.log('Usando cache per il filtraggio delle note');
+      return window.filteredNotesCache[key];
     }
     
-    console.log(`Filtraggio note per utente ${userId}, totale note: ${notes.length}`);
-    
-    // Filtra le note per utente corrente in modo RIGOROSO
+    // Filtra le note per assicurarsi che le note tutorial siano sempre visibili
     const userNotes = notes.filter(note => {
-      // Verifica che la nota appartenga all'utente corrente o sia una nota tutorial esplicita
-      return (note.userId === userId) || (note.isTutorial === true);
+      // Se la nota è undefined o null, saltala
+      if (!note) return false;
+      
+      // Le note tutorial sono sempre visibili
+      if (note.isTutorial === true) return true;
+      
+      // Controlla i tag per identificare note tutorial
+      const hasTutorialTagLocal = note.tags && (
+        Array.isArray(note.tags) 
+          ? note.tags.some(tag => ['tutorial', 'benvenuto'].includes(tag))
+          : typeof note.tags === 'string' && 
+            (note.tags.includes('tutorial') || note.tags.includes('benvenuto'))
+      );
+      
+      if (hasTutorialTagLocal) return true;
+      
+      // Mostra note dell'utente corrente o note senza userId (locali)
+      if (currentUser.id && note.userId === currentUser.id) return true;
+      if (!note.userId) return true;
+      
+      // Altrimenti non mostrare la nota
+      return false;
     });
     
-    console.log(`Note filtrate per utente: ${userNotes.length}`);
+    // Ordina le note appropriate
+    let sortedNotes = [...userNotes];
     
-    // Se non ci sono note dell'utente, mostra una nota temporanea SOLO se non ci sono già tentativi in corso
-    if (userNotes.length === 0 && !notes.some(note => note.temporary === true)) {
-      const tutorialNote = {
-        id: 'tutorial-temp',
-        title: 'Guida di benvenuto a Upsearch Notepad',
-        content: 'Benvenuto in Upsearch Notepad! Questa nota contiene consigli utili per iniziare a utilizzare l\'applicazione.',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        isTutorial: true,
-        userId: userId,
-        temporary: true
-      };
-      
-      console.log('Creata nota tutorial temporanea in attesa della nota reale');
-      setFilteredNotes([tutorialNote]);
-      return;
-    }
-    
-    // Se ci sono già delle note (reali o temporanee), mostrare quelle
-    setFilteredNotes(userNotes);
-    
-    // Se non c'è un termine di ricerca, ordina le note per data
-    if (!searchTerm) {
-      const sortedNotes = [...userNotes].sort((a, b) => {
-        // Metti le note tutorial in cima
-        if (a.isTutorial && !b.isTutorial) return -1;
-        if (!a.isTutorial && b.isTutorial) return 1;
+    // Se c'è un termine di ricerca, filtra ulteriormente
+    if (searchTerm) {
+      const lowerCaseSearch = searchTerm.toLowerCase();
+      sortedNotes = sortedNotes.filter(note => 
+        (note.title && note.title.toLowerCase().includes(lowerCaseSearch)) ||
+        (note.content && typeof note.content === 'string' && 
+         note.content.toLowerCase().includes(lowerCaseSearch))
+      );
+    } else {
+      // Ordina le note: tutorial in cima, poi per data più recente
+      sortedNotes.sort((a, b) => {
+        // Note tutorial prima
+        if ((a.isTutorial || hasTutorialTag(a.tags)) && 
+            !(b.isTutorial || hasTutorialTag(b.tags))) return -1;
+        if (!(a.isTutorial || hasTutorialTag(a.tags)) && 
+            (b.isTutorial || hasTutorialTag(b.tags))) return 1;
         
-        // Per le altre note, ordina per data di aggiornamento (dalla più recente)
+        // Poi per data di aggiornamento
         const dateA = new Date(a.updatedAt || a.createdAt);
         const dateB = new Date(b.updatedAt || b.createdAt);
         return dateB - dateA;
       });
+    }
+    
+    // Salva il risultato nella cache
+    if (!window.filteredNotesCache) window.filteredNotesCache = {};
+    window.filteredNotesCache[key] = sortedNotes;
+    
+    return sortedNotes;
+  }, [hasTutorialTag]);
+
+  // Modifica l'useEffect per il filtraggio note
+  useEffect(() => {
+    // Throttle l'elaborazione per evitare troppi aggiornamenti ravvicinati
+    if (window.filteringTimeout) {
+      clearTimeout(window.filteringTimeout);
+    }
+    
+    window.filteringTimeout = setTimeout(() => {
+      // Ottieni info utente
+      let currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+      const token = localStorage.getItem('token');
       
-      setFilteredNotes(sortedNotes);
-      return;
-    }
+      // Se non c'è un token valido, non filtrare le note
+      if (!token) {
+        console.log('Nessun utente autenticato, sidebar vuota');
+        setFilteredNotes([]);
+        return;
+      }
+      
+      if (notes && notes.length > 0) {
+        const filtered = memoizedFilterNotes(notes, searchTerm, currentUser);
+        console.log(`Note filtrate: ${filtered.length}`);
+        setFilteredNotes(filtered);
+      } else {
+        setFilteredNotes([]);
+      }
+    }, 250); // Throttle di 250ms
     
-    // Se c'è un termine di ricerca, filtra le note dell'utente
-    const lowerCaseSearch = searchTerm.toLowerCase();
-    const filtered = userNotes.filter(note => 
-      (note.title && note.title.toLowerCase().includes(lowerCaseSearch)) ||
-      (note.content && typeof note.content === 'string' && note.content.toLowerCase().includes(lowerCaseSearch))
-    );
-    
-    console.log(`Note filtrate per ricerca "${searchTerm}": ${filtered.length}`);
-    setFilteredNotes(filtered);
-    
-    // Notifica il componente parent del cambio di ricerca
-    if (setSearchQuery && searchTerm !== searchQuery) {
-      setSearchQuery(searchTerm);
-    }
-  }, [notes, searchTerm, searchQuery, setSearchQuery]);
+    return () => {
+      if (window.filteringTimeout) {
+        clearTimeout(window.filteringTimeout);
+      }
+    };
+  }, [notes, searchTerm, searchQuery, setSearchQuery, memoizedFilterNotes]);
   
   // Espande automaticamente la cartella quando una nota al suo interno è attiva
   useEffect(() => {
@@ -147,6 +236,7 @@ const Sidebar = ({
   }
   
   const handleNoteClick = (id) => {
+    console.log(`Nota selezionata: ${id}`);
     setActiveNoteId(id);
     navigate(`/note/${id}`);
     
@@ -156,192 +246,198 @@ const Sidebar = ({
     }
   }
   
-  const handleDragEnd = (result) => {
-    if (!result.destination) return
-    
-    const { draggableId, destination } = result
-    const destinationId = destination.droppableId === 'root' ? null : destination.droppableId
-    
-    const draggedNote = notes.find(note => note.id === draggableId)
-    if (!draggedNote) {
-      console.warn(`Note with id ${draggableId} not found`);
+  const handleCreateNewNote = async (parentId = null) => {
+    // Previeni creazioni multiple rapide
+    if (creatingNote) {
+      console.log('Creazione nota già in corso, ignoro la richiesta');
       return;
     }
     
-    if (destinationId !== null) {
-      const destinationNote = notes.find(note => note.id === destinationId)
-      if (!destinationNote) {
-        console.warn(`Destination note with id ${destinationId} not found`);
-        return;
+    setCreatingNote(true);
+    
+    try {
+      // Aggiungi un piccolo ritardo per prevenire click multipli accidentali
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      console.log('Creazione nuova nota...');
+      const newNote = await createNote(parentId);
+      
+      if (newNote && newNote.id) {
+        console.log('Nota creata con successo:', newNote.id);
+        handleNoteClick(newNote.id);
+      } else {
+        console.error('Creazione nota fallita: nessun ID restituito');
       }
-    }
-    
-    moveNote(draggableId, destinationId)
-  }
-  
-  const renderNoteTree = (parentId = null, level = 0, isDragging = false) => {
-    // Filtriamo le note che hanno il parent specificato
-    const notesToRender = filteredNotes.filter(note => note.parent === parentId);
-    
-    // Aggiungiamo un log per debug
-    console.log(`Rendering notes with parent ${parentId}: ${notesToRender.length} notes found`);
-    
-    if (notesToRender.length === 0) return null;
-    
-    return (
-      <ul className={`note-list ${level > 0 ? 'nested' : ''}`} style={{ paddingLeft: level > 0 ? `${level * 16}px` : '0' }}>
-        {notesToRender.map(note => {
-          const hasChildren = notes.some(n => n.parent === note.id);
-          const isExpanded = expandedFolders[note.id];
-          const isTutorial = note.isTutorial || (note.tags && note.tags.includes('tutorial'));
-          const isTemporary = note.temporary === true;
-          
-          // Formattazione della data per maggiore leggibilità
-          const updatedAt = note.updatedAt || note.createdAt;
-          const formattedDate = updatedAt ? new Date(updatedAt).toLocaleDateString() : '';
-          
-          return (
-            <li key={note.id} className="note-item-container">
-              <Draggable 
-                draggableId={note.id} 
-                index={notes.indexOf(note)} 
-                isDragDisabled={isDragging || isTutorial || isTemporary || note.id === 'tutorial-temp' || note.id.startsWith('tutorial-temp-')}
-                key={note.id}
-              >
-                {(provided) => (
-                  <div
-                    ref={provided.innerRef}
-                    {...provided.draggableProps}
-                    {...provided.dragHandleProps}
-                    className={`note-item ${activeNoteId === note.id ? 'active' : ''} ${isTutorial ? 'tutorial' : ''} ${isTemporary ? 'temporary' : ''}`}
-                  >
-                    <div className="note-item-content" onClick={() => handleNoteClick(note.id)}>
-                      {hasChildren && (
-                        <span 
-                          className="toggle-icon"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleFolder(note.id);
-                          }}
-                        >
-                          {isExpanded ? <FiChevronDown /> : <FiChevronRight />}
-                        </span>
-                      )}
-                      <div className="note-details">
-                        <span className={`note-title ${isTutorial ? 'tutorial-title' : ''} ${isTemporary ? 'temporary-title' : ''}`}>
-                          {note.title || 'Senza titolo'}
-                          {isTemporary && <span className="badge badge-warning ms-1">(locale)</span>}
-                          {isTutorial && <span className="badge badge-success ms-1">(tutorial)</span>}
-                        </span>
-                        <span className="note-date">{formattedDate}</span>
-                      </div>
-                    </div>
-                    
-                    {hasChildren && isExpanded && (
-                      <Droppable droppableId={note.id} type="note">
-                        {(provided) => (
-                          <div
-                            ref={provided.innerRef}
-                            {...provided.droppableProps}
-                            className="nested-notes"
-                          >
-                            {renderNoteTree(note.id, level + 1, isDragging)}
-                            {provided.placeholder}
-                          </div>
-                        )}
-                      </Droppable>
-                    )}
-                  </div>
-                )}
-              </Draggable>
-            </li>
-          )
-        })}
-      </ul>
-    )
-  }
-  
-  const handleCreateNote = async () => {
-    setLoading(true)
-    try {
-      await createNote()
     } catch (error) {
-      toast.error('Errore nella creazione della nota')
-      console.error('Errore nella creazione della nota:', error)
+      console.error('Errore nella creazione della nota:', error);
+      toast.error('Errore nella creazione della nota');
     } finally {
-      setLoading(false)
+      setCreatingNote(false);
     }
-  }
-  
-  const handleDeleteNote = async (noteId, event) => {
-    event.stopPropagation()
-    
-    if (!window.confirm('Sei sicuro di voler eliminare questa nota?')) {
-      return
-    }
-    
-    setLoading(true)
-    try {
-      await noteApi.deleteNote(noteId)
-      toast.success('Nota eliminata con successo')
-    } catch (error) {
-      toast.error('Errore nell\'eliminazione della nota')
-      console.error('Errore nell\'eliminazione della nota:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-  
-  // Aggiungi questa funzione helper al componente Sidebar per le props di default
-  const getDefaultDraggableProps = (draggableProps = {}) => {
-    return {
-      isDragDisabled: false,
-      ...draggableProps
-    };
   };
   
-  return (
-    <div className={`sidebar h-100 d-flex flex-column ${isOpen ? 'open' : ''}`}>
-      <div className="sidebar-header d-flex align-items-center justify-content-between p-3">
-        <h2 className="m-0">Upsearch Notepad</h2>
-        <div className="sidebar-header-actions d-flex align-items-center">
-          <Button 
-            variant="link" 
-            className="theme-toggle p-1" 
-            onClick={toggleTheme}
-          >
-            {theme === 'dark' ? <FiSun /> : <FiMoon />}
-          </Button>
-          {closeSidebar && (
+  const handleSearchChange = (e) => {
+    setSearchTerm(e.target.value);
+  };
+  
+  const handleClearSearch = () => {
+    setSearchTerm('');
+    setSearchQuery('');
+  };
+  
+  const renderNoteItem = (note) => {
+    const isTutorial = note.isTutorial || (note.tags && note.tags.includes('tutorial'));
+    const isTemporary = note.temporary === true;
+    const isActive = note.id === activeNoteId;
+    const hasChildren = notes.some(n => n.parent === note.id);
+    const isExpanded = expandedFolders[note.id];
+    const contentPreview = generateContentPreview(note.content);
+    
+    return (
+      <div 
+        className={`note-card ${isActive ? 'active' : ''} ${isTutorial ? 'tutorial' : ''}`}
+        onClick={() => handleNoteClick(note.id)}
+      >
+        <div className="note-card-header">
+          <div className="note-title-container">
+            {hasChildren && (
+              <button 
+                className="toggle-btn" 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleFolder(note.id);
+                }}
+              >
+                {isExpanded ? <FiChevronDown /> : <FiChevronRight />}
+              </button>
+            )}
+            <h3 className="note-title">{note.title || 'Senza titolo'}</h3>
+          </div>
+          <div className="note-meta">
+            <span className="note-date"><FiClock /> {formatDate(note.updatedAt || note.createdAt)}</span>
+          </div>
+        </div>
+        
+        {note.tags && note.tags.length > 0 && (
+          <div className="note-tags">
+            {note.tags.map(tag => (
+              <span key={tag} className="note-tag">{tag}</span>
+            ))}
+          </div>
+        )}
+        
+        <div className="note-preview">
+          {contentPreview}
+        </div>
+        
+        {(isTutorial || isTemporary) && (
+          <div className="note-badges">
+            {isTemporary && <span className="badge local-badge">Locale</span>}
+            {isTutorial && <span className="badge tutorial-badge">Tutorial</span>}
+          </div>
+        )}
+      </div>
+    );
+  };
+  
+  const renderNotesContainer = () => {
+    // Verifica se filteredNotes è definito e ha elementi
+    if (!filteredNotes || filteredNotes.length === 0) {
+      if (loading) {
+        return (
+          <div className="notes-loading">
+            <Spinner animation="border" size="sm" />
+            <span>Caricamento note...</span>
+          </div>
+        );
+      }
+      
+      if (searchTerm) {
+        return (
+          <div className="no-notes">
+            <p>Nessun risultato per "{searchTerm}"</p>
             <Button 
               variant="link" 
-              className="close-sidebar-btn d-md-none p-1" 
-              onClick={closeSidebar} 
-              aria-label="Chiudi sidebar"
+              className="clear-search" 
+              onClick={handleClearSearch}
             >
-              <FiX />
+              Cancella ricerca
             </Button>
-          )}
+          </div>
+        );
+      }
+      
+      return (
+        <div className="no-notes">
+          <p>Nessuna nota disponibile</p>
+        </div>
+      );
+    }
+    
+    // Filtra solo le note radice
+    const rootNotes = filteredNotes.filter(note => !note.parent);
+    
+    return (
+      <div className="notes-list">
+        {rootNotes.map(note => (
+          <div key={note.id} className="note-item-container">
+            {renderNoteItem(note)}
+            
+            {/* Renderizza le note figlie se la cartella è espansa */}
+            {expandedFolders[note.id] && notes.some(n => n.parent === note.id) && (
+              <div className="nested-notes" style={{ marginLeft: '12px' }}>
+                {notes
+                  .filter(n => n.parent === note.id)
+                  .map(childNote => (
+                    <div key={childNote.id} className="note-item-container">
+                      {renderNoteItem(childNote)}
+                    </div>
+                  ))
+                }
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  return (
+    <div className="sidebar">
+      <div className="sidebar-header">
+        <h2>Note</h2>
+        <div className="sidebar-header-actions">
+          <button 
+            className="theme-toggle" 
+            onClick={toggleTheme} 
+            aria-label={theme === 'light' ? 'Passa al tema scuro' : 'Passa al tema chiaro'}
+          >
+            {theme === 'light' ? <FiMoon /> : <FiSun />}
+          </button>
+          <button 
+            className="close-sidebar-btn d-md-none" 
+            onClick={closeSidebar}
+            aria-label="Chiudi sidebar"
+          >
+            <FiX />
+          </button>
         </div>
       </div>
       
-      <div className="search-container p-3">
+      <div className="search-container">
         <InputGroup>
-          <InputGroup.Text className="bg-transparent border-end-0">
-            <FiSearch className="search-icon" />
-          </InputGroup.Text>
           <Form.Control
             type="text"
             placeholder="Cerca note..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="search-input border-start-0"
+            onChange={handleSearchChange}
+            className="search-input"
           />
           {searchTerm && (
             <Button 
               variant="link" 
-              className="clear-search" 
-              onClick={() => setSearchTerm('')}
+              className="clear-search-btn"
+              onClick={handleClearSearch}
             >
               <FiX />
             </Button>
@@ -349,27 +445,31 @@ const Sidebar = ({
         </InputGroup>
       </div>
       
-      <div className="sidebar-actions px-3 pb-3">
+      <div className="sidebar-actions">
         <Button 
-          variant="primary" 
-          className="new-note-btn w-100 d-flex align-items-center justify-content-center"
-          onClick={handleCreateNote}
-          disabled={loading}
+          className="new-note-btn" 
+          onClick={() => handleCreateNewNote()}
+          disabled={creatingNote}
         >
-          <FiPlus className="me-2" /> {loading ? '...' : 'Nuova Nota'}
+          {creatingNote ? (
+            <>
+              <Spinner animation="border" size="sm" className="me-2" />
+              Creazione...
+            </>
+          ) : (
+            <>
+              <FiPlus className="me-2" />
+              Nuova Nota
+            </>
+          )}
         </Button>
       </div>
       
-      <div className="notes-container flex-grow-1 overflow-auto px-2">
-        <Notes 
-          notes={filteredNotes} 
-          activeNoteId={activeNoteId} 
-          onNoteSelect={handleNoteClick} 
-          onCreateNote={(parentId) => createNote({ parent: parentId })} 
-        />
+      <div className="notes-container">
+        {renderNotesContainer()}
       </div>
     </div>
-  )
-}
+  );
+};
 
-export default Sidebar
+export default Sidebar;

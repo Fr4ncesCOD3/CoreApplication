@@ -15,7 +15,8 @@ const Toolbar = ({
   toggleSidebar,
   lastSyncTime,
   isOffline,
-  contentChanged = false
+  contentChanged = false,
+  onContentChange
 }) => {
   const [title, setTitle] = useState('')
   const [tags, setTags] = useState([])
@@ -43,9 +44,25 @@ const Toolbar = ({
     setTitle(newTitle)
   }
   
-  const handleTitleBlur = () => {
+  const handleTitleBlur = async () => {
     if (note && title !== note.title) {
-      updateNote(note.id, { title })
+      setLoading(true);
+      try {
+        await updateNote(note.id, { title });
+        toast.success('Titolo aggiornato con successo');
+      } catch (error) {
+        console.error('Errore durante l\'aggiornamento del titolo:', error);
+        // Ripristina il titolo originale in caso di errore
+        setTitle(note.title || '');
+        
+        if (!navigator.onLine) {
+          toast.warning('Impossibile aggiornare il titolo in modalità offline. Le modifiche saranno salvate quando tornerai online.');
+        } else {
+          toast.error('Errore durante l\'aggiornamento del titolo. Riprova più tardi.');
+        }
+      } finally {
+        setLoading(false);
+      }
     }
   }
   
@@ -57,20 +74,53 @@ const Toolbar = ({
   }
   
   const handleSaveNote = async () => {
-    if (!note) return;
+    if (!note || loading) return;
+    
+    // Verifica se il contenuto è cambiato
+    if (!contentChanged) {
+      toast.info('Nessuna modifica da salvare');
+      return;
+    }
     
     setLoading(true);
+    
     try {
-      await onSave();
+      // Recupera eventuali bozze salvate in sessionStorage
+      let content = null;
+      try {
+        const draftData = sessionStorage.getItem(`draft_${note.id}`);
+        if (draftData) {
+          const parsed = JSON.parse(draftData);
+          content = parsed.content;
+          // Rimuoviamo la bozza
+          sessionStorage.removeItem(`draft_${note.id}`);
+        }
+      } catch (error) {
+        console.error('Errore nel recupero della bozza:', error);
+      }
+      
+      // Effettua il salvataggio della nota con il contenuto recuperato dalla bozza (se presente)
+      await onSave(note.id, content);
+      
+      // Aggiorna anche il titolo se è stato modificato
+      if (title !== note.title) {
+        await updateNote(note.id, { title });
+      }
+      
       toast.success('Nota salvata con successo');
+      
+      // Imposta lo stato delle modifiche su 'false' dopo il salvataggio
+      if (contentChanged && typeof onContentChange === 'function') {
+        onContentChange(false);
+      }
     } catch (error) {
       console.error('Errore durante il salvataggio:', error);
       
-      // Verifica se è un problema di connessione
-      if (!navigator.onLine || error.message === 'Network Error') {
-        toast.error('Impossibile salvare: nessuna connessione al server');
+      // Gestione degli errori in base allo stato della connessione
+      if (!navigator.onLine) {
+        toast.warning('Nota salvata localmente. Verrà sincronizzata quando tornerai online.');
       } else {
-        toast.error('Errore durante il salvataggio della nota');
+        toast.error('Errore durante il salvataggio. Riprova più tardi.');
       }
     } finally {
       setLoading(false);
@@ -259,7 +309,38 @@ const Toolbar = ({
     
     printWindow.document.close();
   };
-  
+
+  const ConnectionStatus = ({ isOffline, lastSyncTime }) => {
+    const [dots, setDots] = useState('.');
+    
+    useEffect(() => {
+      if (isOffline) {
+        const interval = setInterval(() => {
+          setDots(prev => prev.length < 3 ? prev + '.' : '.');
+        }, 500);
+        return () => clearInterval(interval);
+      }
+    }, [isOffline]);
+    
+    if (isOffline) {
+      return (
+        <div className="connection-status offline">
+          <span className="status-icon">🔴</span>
+          <span className="status-text">Offline{dots}</span>
+        </div>
+      );
+    }
+    
+    return (
+      <div className="connection-status online">
+        <span className="status-icon">🟢</span>
+        <span className="status-text">
+          Online {lastSyncTime && `(Ultimo salvataggio: ${formatTimestamp(lastSyncTime)})`}
+        </span>
+      </div>
+    );
+  };
+
   return (
     <div className="toolbar">
       <Container fluid>
@@ -404,14 +485,14 @@ const Toolbar = ({
               </div>
             )}
             
-            {lastSyncTime && (
-              <div className="sync-info ms-2">
-                <small className={`${isOffline ? 'text-danger' : (contentChanged ? 'text-warning' : 'text-success')}`}>
-                  {isOffline ? '🔴 Offline' : (contentChanged ? '🟠 Modificato' : '🟢 Salvato')}
-                  {!contentChanged && !isOffline && <span className="ms-1">{formatTimestamp(lastSyncTime)}</span>}
-                </small>
-              </div>
-            )}
+            <div className="toolbar-status">
+              <ConnectionStatus isOffline={isOffline} lastSyncTime={lastSyncTime} />
+              {isOffline && contentChanged && (
+                <div className="pending-changes">
+                  <span className="badge bg-warning">Modifiche in attesa di sincronizzazione</span>
+                </div>
+              )}
+            </div>
           </Col>
         </Row>
       </Container>

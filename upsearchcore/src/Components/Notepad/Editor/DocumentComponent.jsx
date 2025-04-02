@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { NodeViewWrapper } from '@tiptap/react'
-import { FiFile, FiEye, FiTrash2, FiMove, FiDownload, FiAlertTriangle, FiZoomIn, FiZoomOut, FiRotateCw, FiChevronLeft, FiChevronRight } from 'react-icons/fi'
+import { FiFile, FiEye, FiTrash2, FiMove, FiDownload, FiAlertTriangle, FiZoomIn, FiZoomOut, FiRotateCw, FiChevronLeft, FiChevronRight, FiFileText, FiImage, FiFilm, FiMusic, FiPackage } from 'react-icons/fi'
 import { Modal, Button } from 'react-bootstrap'
 import './DocumentComponent.css'
 
@@ -111,37 +111,33 @@ const DocumentComponent = ({ node, updateAttributes, editor, getPos }) => {
     }
   }
   
-  const formatFileSize = (bytes) => {
-    if (bytes === 0) return '0 Bytes'
-    const k = 1024
-    const sizes = ['Bytes', 'KB', 'MB', 'GB']
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+  const formatFileSize = size => {
+    if (size < 1024) return size + ' B'
+    else if (size < 1024 * 1024) return (size / 1024).toFixed(1) + ' KB'
+    else if (size < 1024 * 1024 * 1024) return (size / (1024 * 1024)).toFixed(1) + ' MB'
+    else return (size / (1024 * 1024 * 1024)).toFixed(1) + ' GB'
   }
   
   const getFileIcon = () => {
-    if (fileType.includes('image')) {
-      return <img 
-        src={fileContent} 
-        alt={fileName} 
-        className="document-preview-image" 
-      />
-    }
+    const type = fileType.split('/')[0];
     
-    // Icone specifiche per diversi tipi di file
-    if (fileType.includes('pdf')) {
-      return <div className="file-icon pdf-icon">PDF</div>
-    } else if (fileType.includes('word') || fileType.includes('document')) {
-      return <div className="file-icon doc-icon">DOC</div>
-    } else if (fileType.includes('excel') || fileType.includes('sheet')) {
-      return <div className="file-icon xls-icon">XLS</div>
-    } else if (fileType.includes('powerpoint') || fileType.includes('presentation')) {
-      return <div className="file-icon ppt-icon">PPT</div>
-    } else if (fileType.includes('text')) {
-      return <div className="file-icon txt-icon">TXT</div>
+    switch (type) {
+      case 'image':
+        return <FiImage size={28} className="document-icon-svg" />;
+      case 'video':
+        return <FiFilm size={28} className="document-icon-svg" />;
+      case 'audio':
+        return <FiMusic size={28} className="document-icon-svg" />;
+      case 'text':
+        return <FiFileText size={28} className="document-icon-svg" />;
+      case 'application':
+        if (fileType.includes('pdf')) {
+          return <FiFileText size={28} className="document-icon-svg pdf" />;
+        }
+        return <FiPackage size={28} className="document-icon-svg" />;
+      default:
+        return <FiFile size={28} className="document-icon-svg" />;
     }
-    
-    return <FiFile size={24} />
   }
   
   const handleViewDocument = (e) => {
@@ -156,6 +152,7 @@ const DocumentComponent = ({ node, updateAttributes, editor, getPos }) => {
         : 'Non visualizzabile'
     });
     setShowModal(true);
+    document.body.style.overflow = 'hidden'
   }
   
   const handleRemoveDocument = (e) => {
@@ -318,74 +315,87 @@ const DocumentComponent = ({ node, updateAttributes, editor, getPos }) => {
     }
     
     try {
-      if (fileType.includes('image')) {
-        // Assicuriamoci che il contenuto sia un URL valido
-        const imgSrc = fileContent.startsWith('data:') || fileContent.startsWith('http') 
-                      ? fileContent 
-                      : `data:${fileType};base64,${fileContent}`;
-        
+      if (fileType.startsWith('image/')) {
         return (
-          <div className="document-image-container">
+          <div className="document-preview image-preview">
             <img 
-              src={imgSrc} 
+              src={fileContent} 
               alt={fileName} 
-              className="document-modal-image" 
-              onError={(e) => {
-                console.error("Errore nel caricamento dell'immagine:", fileName);
-                e.target.src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100' height='100' viewBox='0 0 24 24' fill='none' stroke='%23d63031' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z'/%3E%3Cline x1='12' y1='9' x2='12' y2='13'/%3E%3Cline x1='12' y1='17' x2='12.01' y2='17'/%3E%3C/svg%3E";
-                e.target.className = "error-image";
-              }}
+              className="document-image" 
+              loading="lazy"
             />
           </div>
-        );
-      }
-      
-      if (fileType.includes('text') || fileType.includes('json') || fileType.includes('xml') || 
-          fileType.includes('javascript') || fileType.includes('html') || fileType.includes('css')) {
-        // Per i file di testo, assicuriamoci che il contenuto sia una stringa
-        let textContent;
-        
-        if (typeof fileContent === 'string') {
-          // Se è già una stringa, usala direttamente
-          textContent = fileContent;
-        } else if (fileContent instanceof ArrayBuffer) {
-          // Se è un ArrayBuffer, convertilo in stringa
-          textContent = new TextDecoder().decode(fileContent);
-        } else if (typeof fileContent === 'object') {
-          // Se è un oggetto, convertilo in JSON
-          textContent = JSON.stringify(fileContent, null, 2);
-        } else {
-          // Fallback
-          textContent = String(fileContent);
-        }
-        
+        )
+      } else if (fileType.startsWith('application/pdf')) {
         return (
-          <div className="document-text-container">
-            <pre className="document-text-content">{textContent}</pre>
+          <div className="document-preview pdf-preview">
+            <iframe 
+              src={fileContent} 
+              title={fileName} 
+              className="pdf-viewer"
+              loading="lazy"
+            />
+            <div className="pdf-fallback">
+              <p>Se il PDF non si carica correttamente, puoi scaricarlo usando il pulsante qui sotto.</p>
+              <Button 
+                onClick={handleDownload}
+                className="download-btn"
+                variant="primary"
+              >
+                <FiDownload className="me-2" /> Scarica PDF
+              </Button>
+            </div>
           </div>
-        );
-      }
-      
-      if (fileType.includes('pdf')) {
-        return renderPDFContent();
-      }
-      
-      // Per altri tipi di file
-      return (
-        <div className="document-generic-container">
-          <div className="file-type-icon">
-            <FiFile size={48} />
-            <span className="file-extension">{fileType.split('/')[1]?.toUpperCase() || 'FILE'}</span>
+        )
+      } else if (fileType.startsWith('text/')) {
+        return (
+          <div className="document-preview text-preview">
+            <pre className="text-content">{fileContent}</pre>
           </div>
-          <p className="mt-3">Anteprima non disponibile per questo tipo di file</p>
-          <button 
-            onClick={handleDownload}
-            className="document-download-button"
-          >
-            <FiDownload className="me-2" /> Scarica il file
-          </button>
-        </div>
-      );
+        )
+      } else if (fileType.startsWith('video/')) {
+        return (
+          <div className="document-preview video-preview">
+            <video 
+              src={fileContent} 
+              controls 
+              className="video-player"
+              preload="metadata"
+            >
+              Il tuo browser non supporta la riproduzione video.
+            </video>
+          </div>
+        )
+      } else if (fileType.startsWith('audio/')) {
+        return (
+          <div className="document-preview audio-preview">
+            <audio 
+              src={fileContent} 
+              controls 
+              className="audio-player"
+              preload="metadata"
+            >
+              Il tuo browser non supporta la riproduzione audio.
+            </audio>
+          </div>
+        )
+      } else {
+        return (
+          <div className="document-preview generic-preview">
+            <div className="file-icon-large">
+              {getFileIcon()}
+            </div>
+            <p className="file-info">{fileName}</p>
+            <Button 
+              onClick={handleDownload}
+              className="download-btn"
+              variant="primary"
+            >
+              <FiDownload className="me-2" /> Scarica File
+            </Button>
+          </div>
+        )
+      }
     } catch (error) {
       console.error("Errore nel rendering del documento:", error);
       return (
@@ -395,12 +405,13 @@ const DocumentComponent = ({ node, updateAttributes, editor, getPos }) => {
           </div>
           <p className="error-message">Si è verificato un errore durante la visualizzazione del documento.</p>
           <p className="error-details">{error.message}</p>
-          <button 
+          <Button 
             onClick={handleDownload}
             className="document-download-button"
+            variant="outline-primary"
           >
             <FiDownload className="me-2" /> Prova a scaricare il file
-          </button>
+          </Button>
         </div>
       );
     }
@@ -465,7 +476,7 @@ const DocumentComponent = ({ node, updateAttributes, editor, getPos }) => {
       onDragEnd={handleDragEnd}
     >
       <div className="document-container" onClick={handleViewDocument}>
-        <div className="document-icon">
+        <div className="document-preview-thumbnail">
           {getFileIcon()}
         </div>
         <div className="document-info">
@@ -479,18 +490,28 @@ const DocumentComponent = ({ node, updateAttributes, editor, getPos }) => {
             className="document-action-btn view-btn" 
             onClick={handleViewDocument}
             title="Visualizza documento"
+            aria-label="Visualizza documento"
           >
             <FiEye />
+          </button>
+          <button 
+            className="document-action-btn download-btn" 
+            onClick={handleDownload}
+            title="Scarica documento"
+            aria-label="Scarica documento"
+          >
+            <FiDownload />
           </button>
           <button 
             className="document-action-btn delete-btn" 
             onClick={handleRemoveDocument}
             title="Elimina documento"
+            aria-label="Elimina documento"
           >
             <FiTrash2 />
           </button>
         </div>
-        <div className="drag-handle">
+        <div className="drag-handle" title="Trascina per riordinare">
           <FiMove />
         </div>
       </div>
@@ -509,51 +530,24 @@ const DocumentComponent = ({ node, updateAttributes, editor, getPos }) => {
       >
         <Modal.Header closeButton>
           <Modal.Title>{fileName}</Modal.Title>
-          <div className="document-controls">
-            <button 
-              className="document-control-btn" 
-              onClick={handleZoomIn}
-              title="Zoom in"
+          <div className="document-modal-actions">
+            <Button 
+              variant="outline-secondary" 
+              size="sm" 
+              onClick={() => setIsFullscreen(!isFullscreen)}
+              className="fullscreen-toggle"
             >
-              <FiZoomIn />
-            </button>
-            <button 
-              className="document-control-btn" 
-              onClick={handleZoomOut}
-              title="Zoom out"
-            >
-              <FiZoomOut />
-            </button>
-            <button 
-              className="document-control-btn" 
-              onClick={handleRotate}
-              title="Ruota"
-            >
-              <FiRotateCw />
-            </button>
-            <button 
-              className="document-control-btn" 
-              onClick={toggleFullscreen}
-              title={isFullscreen ? "Esci da schermo intero" : "Schermo intero"}
-            >
-              {isFullscreen ? "Esci" : "Schermo intero"}
-            </button>
+              {isFullscreen ? 'Esci da schermo intero' : 'Schermo intero'}
+            </Button>
           </div>
         </Modal.Header>
-        <Modal.Body>
-          <div 
-            className="document-viewer-container" 
-            ref={viewerRef}
-            tabIndex={0} // Per permettere il focus e la gestione dei tasti
-          >
-            {renderDocumentContent()}
-          </div>
+        <Modal.Body className="document-modal-body">
+          {renderDocumentContent()}
         </Modal.Body>
         <Modal.Footer>
           <Button 
             variant="primary" 
             onClick={handleDownload}
-            className="download-btn"
           >
             <FiDownload className="me-2" /> Scarica
           </Button>

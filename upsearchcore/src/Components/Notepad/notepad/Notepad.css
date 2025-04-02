@@ -2,6 +2,9 @@
   display: flex;
   height: 100vh;
   overflow: hidden;
+  width: 100%;
+  position: relative;
+  z-index: 1;
 }
 
 .sidebar-container {
@@ -20,11 +23,14 @@
   flex-grow: 1;
   height: 100%;
   overflow: hidden;
+  transition: width 0.3s ease;
 }
 
 .toolbar-container {
   flex-shrink: 0;
   border-bottom: 1px solid var(--border-color);
+  z-index: 10;
+  background-color: var(--bg-secondary);
 }
 
 .editor-container {
@@ -32,6 +38,7 @@
   overflow: auto;
   display: flex;
   flex-direction: column;
+  background-color: var(--bg-primary);
 }
 
 .toolbar {
@@ -43,6 +50,9 @@
   flex: 1;
   overflow: auto;
   padding: 1rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
 }
 
 .toolbar-wrapper {
@@ -76,7 +86,7 @@
 .spinner {
   border: 4px solid rgba(0, 0, 0, 0.1);
   border-radius: 50%;
-  border-top: 4px solid var(--primary);
+  border-top: 4px solid var(--accent-color);
   width: 40px;
   height: 40px;
   animation: spin 1s linear infinite;
@@ -132,7 +142,11 @@
   }
   
   .content-container {
-    width: 100%;
+    width: 100% !important;
+  }
+  
+  .editor-wrapper {
+    padding: 0.75rem;
   }
 }
 
@@ -144,6 +158,10 @@
   
   .content-container {
     flex: 3; /* Dai più spazio all'editor su schermi grandi */
+  }
+  
+  .editor-wrapper {
+    padding: 2rem;
   }
 }
 
@@ -265,4 +283,109 @@
 .note-title.tutorial-title {
   font-weight: bold;
   color: #28a745;
+}
+
+/* Assicurare che i modali abbiano priorità sugli altri elementi */
+.modal {
+  z-index: 1500;
+}
+
+.modal-backdrop {
+  z-index: 1400;
+}
+
+/* Stile per la classe modal-open */
+body.modal-open {
+  overflow: hidden;
+  padding-right: 0 !important; /* evita spostamenti di layout */
+}
+
+/* Opacizzare l'intera applicazione quando il modale è aperto */
+body.modal-open .notepad-container {
+  position: relative;
+}
+
+body.modal-open .notepad-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 1300;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+/* Assicurarsi che il modale rimanga visibile e in primo piano */
+body.modal-open .modal-dialog {
+  z-index: 1500;
+  position: relative;
+}
+
+/* Transizioni fluide per gli elementi dell'interfaccia */
+.sidebar-container,
+.content-container,
+.editor-container,
+.toolbar-container {
+  transition: opacity 0.3s ease, filter 0.3s ease;
+}
+
+/* Mantieni la visibilità del modale */
+.modal-content {
+  opacity: 1 !important;
+  transform: none;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5);
+}
+
+/* Gestione della sovrapposizione per i modali */
+.modal, .modal-backdrop {
+  z-index: 1060 !important; /* Assicurarsi che sia sopra tutto */
+}
+
+/* Prevenire lo spostamento del layout e applicare transizioni fluide */
+body.modal-open {
+  overflow: hidden;
+  padding-right: 0 !important;
+}
+
+/* Applicare opacità a tutto il contenitore del notepad quando un modale è aperto */
+body.modal-open .notepad-container {
+  transition: opacity 0.3s ease, filter 0.3s ease;
+}
+
+/* Transizioni fluide per tutti gli elementi principali */
+.sidebar-container,
+.content-container,
+.editor-container,
+.toolbar-container {
+  transition: opacity 0.3s ease, filter 0.3s ease;
+}
+
+/* Applicare effetto di opacità quando un modale è aperto */
+body.modal-open .sidebar-container,
+body.modal-open .content-container,
+body.modal-open .editor-container,
+body.modal-open .toolbar-container {
+  opacity: 0.3;
+  filter: blur(1px);
+}
+
+/* Mantenere il modale completamente visibile */
+body.modal-open .modal {
+  opacity: 1 !important;
+  filter: none !important;
+}
+
+body.modal-open .modal-content {
+  opacity: 1 !important;
+  filter: none !important;
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+/* Overlay più pronunciato quando il modale è aperto */
+.modal-backdrop.show {
+  opacity: 0.7 !important;
+  backdrop-filter: blur(3px);
 }

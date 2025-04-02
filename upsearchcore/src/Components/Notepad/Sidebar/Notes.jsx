@@ -30,8 +30,9 @@ const Notes = ({ notes, activeNoteId, onNoteSelect, onCreateNote }) => {
   }
   
   const handleNoteClick = (id) => {
-    onNoteSelect(id)
-    navigate(`/note/${id}`)
+    console.log(`Selezionata nota con ID: ${id}`);
+    onNoteSelect(id);
+    navigate(`/note/${id}`);
   }
   
   // Trova tutte le note di primo livello o note senza parent
@@ -62,7 +63,7 @@ const Notes = ({ notes, activeNoteId, onNoteSelect, onCreateNote }) => {
   
   // Funzione per renderizzare la struttura gerarchica delle note
   const renderNoteTree = (parentId = null, level = 0) => {
-    // Se siamo al primo livello e non ci sono note con parent=null
+    // Determina quali note visualizzare
     let notesToRender;
     
     if (level === 0 && !notes.some(note => note.parent === null)) {
@@ -70,8 +71,6 @@ const Notes = ({ notes, activeNoteId, onNoteSelect, onCreateNote }) => {
     } else {
       notesToRender = notes.filter(note => note.parent === parentId);
     }
-    
-    console.log(`Notes.jsx: Rendering ${notesToRender.length} notes with parent ${parentId} at level ${level}`);
     
     if (notesToRender.length === 0) {
       return null;
@@ -82,7 +81,16 @@ const Notes = ({ notes, activeNoteId, onNoteSelect, onCreateNote }) => {
         {notesToRender.map(note => {
           const hasChildren = notes.some(n => n.parent === note.id);
           const isExpanded = expandedFolders[note.id];
-          const isTutorial = note.isTutorial || (note.tags && note.tags.includes('tutorial'));
+          
+          // Migliora la rilevazione di note tutorial
+          const isTutorial = note.isTutorial === true || 
+            (note.tags && (
+              Array.isArray(note.tags) 
+                ? note.tags.some(tag => ['tutorial', 'benvenuto'].includes(tag))
+                : typeof note.tags === 'string' && 
+                  (note.tags.includes('tutorial') || note.tags.includes('benvenuto'))
+            ));
+          
           const isTemporary = note.temporary === true;
           
           return (
@@ -109,7 +117,7 @@ const Notes = ({ notes, activeNoteId, onNoteSelect, onCreateNote }) => {
                   {(isTutorial || isTemporary) && (
                     <div className="note-badges">
                       {isTemporary && <span className="badge bg-warning me-1">Locale</span>}
-                      {isTutorial && <span className="badge bg-success">Tutorial</span>}
+                      {isTutorial && <span className="badge bg-info">Tutorial</span>}
                     </div>
                   )}
                 </div>

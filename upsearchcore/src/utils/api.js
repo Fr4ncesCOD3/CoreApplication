@@ -1,17 +1,20 @@
 import axios from 'axios';
 import { debounce } from 'lodash';
 import { toast } from './notification';
+import { CacheService } from './cache';
 
-// URL di base del backend
-const baseURL = 'https://backend-upsearch.onrender.com';
+// Usa l'URL dal file .env
+const API_URL = import.meta.env.VITE_API_URL;
+console.log('API URL configurato:', API_URL);
 
-// Configura axios con l'URL base e gli header di default
+// Configurazione di base
 const api = axios.create({
-  baseURL,
-  timeout: 30000, // Ridotto da 60000 a 30000ms (30 secondi)
+  baseURL: API_URL,
+  timeout: parseInt(import.meta.env.VITE_API_TIMEOUT) || 30000,
   headers: {
     'Content-Type': 'application/json'
-  }
+  },
+  withCredentials: false // Il backend non usa cookies per sessione, usa JWT
 });
 
 // Stato globale per tenere traccia di eventuali tentativi di risveglio dell'istanza
@@ -24,31 +27,151 @@ const COOLDOWN_PERIOD = 10000; // 10 secondi di attesa dopo un errore 429
 
 // Aggiungi gestione rate limiting e strategie di fallback
 let lastRequestTime = 0;
-const MIN_REQUEST_INTERVAL = 1000; // 1 secondo tra richieste
+const MIN_REQUEST_INTERVAL = {
+  'getNotes': 5000,        // 5 secondi
+  'createNote': 3000,      // 3 secondi
+  'updateNote': 10000,     // 10 secondi
+  'deleteNote': 3000       // 3 secondi
+};
 const RATE_LIMIT_COOLDOWN = 5000; // 5 secondi di attesa in caso di errore 429
 const CACHE_TTL = 2 * 60 * 1000; // Ridotto da 5 a 2 minuti
 
 // Aggiungi questo helper di throttling
 let apiThrottleTimers = {};
 
-const throttleApiCall = (key, fn, delay = 2000) => {
-  if (apiThrottleTimers[key]) {
-    clearTimeout(apiThrottleTimers[key]);
+// Implementa un throttle basato sulla durata
+const apiThrottleQueue = {};
+
+// Funzione migliorata per il throttling delle API
+const throttleApiCall = (key, fn, forceExecute = false) => {
+  const now = Date.now();
+  const lastCallTime = apiThrottleQueue[key] || 0;
+  const interval = MIN_REQUEST_INTERVAL[key.split('_')[0]] || 2000;
+  
+  // Se è trascorso abbastanza tempo o forziamo l'esecuzione
+  if (forceExecute || now - lastCallTime >= interval) {
+    // Aggiorna il timestamp
+    apiThrottleQueue[key] = now;
+    return fn();
   }
   
-  return new Promise(resolve => {
-    apiThrottleTimers[key] = setTimeout(async () => {
-      try {
-        const result = await fn();
-        resolve(result);
-      } catch (error) {
-        console.error(`Errore nell'API throttled (${key}):`, error);
-        throw error;
-      } finally {
-        delete apiThrottleTimers[key];
+  // Altrimenti restituisci l'ultima promessa o reject
+  console.log(`Richiesta ${key} throttled (intervallo ${interval}ms)`);
+  return Promise.reject({ throttled: true, message: `Richiesta limitata: attendi ${Math.ceil((lastCallTime + interval - now)/1000)}s` });
+};
+
+// Stato per memorizzare il token CSRF
+let csrfToken = null;
+
+// Riduci richieste multiple con debounce
+const getCsrfTokenDebounced = debounce(async () => {
+  try {
+    console.log('Richiedo nuovo token CSRF (debounced)');
+    const token = localStorage.getItem('token');
+    
+    // Usa l'URL completo con API_URL
+    const response = await axios.get(`${API_URL}/csrf`, {
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+    });
+    
+    if (response.data && response.data.token) {
+      setCsrfToken(response.data.token);
+      return response.data.token;
+    }
+    return null;
+  } catch (error) {
+    console.error('Errore nel recupero del token CSRF:', error);
+    return null;
+  }
+}, 1000);
+
+// Sostituisci la funzione getCsrfToken esistente
+export const getCsrfToken = async (forceRefresh = false) => {
+  const savedToken = localStorage.getItem('csrfToken');
+  if (savedToken && !forceRefresh) return savedToken;
+  
+  try {
+    console.log('Richiedo nuovo token CSRF');
+    const token = localStorage.getItem('token');
+    
+    // Usa l'URL corretto per il backend
+    const response = await axios.get(`${API_URL}/csrf`, {
+      headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+    });
+    
+    if (response.data && response.data.token) {
+      setCsrfToken(response.data.token);
+      console.log('Ottenuto nuovo CSRF token:', response.data.token);
+      return response.data.token;
+    }
+    console.warn('Risposta CSRF senza token:', response.data);
+    return null;
+  } catch (error) {
+    console.error('Errore nel recupero del token CSRF:', error);
+    return null;
+  }
+};
+
+/**
+ * Imposta un token CSRF recuperato dal backend
+ * @param {string} token - Token CSRF
+ */
+export const setCsrfToken = (token) => {
+  csrfToken = token;
+  // Salva il token in localStorage per averlo disponibile tra i refresh
+  localStorage.setItem('csrfToken', token);
+  console.log('Token CSRF salvato:', token);
+};
+
+// Aggiungi una funzione per ottenere il token salvato
+export const getSavedCsrfToken = () => {
+  return csrfToken || localStorage.getItem('csrfToken');
+};
+
+// Funzione per ottenere un token CSRF valido
+const fetchCsrfToken = async () => {
+  // Verifica se abbiamo già un token valido (meno di 30 minuti)
+  if (csrfToken && csrfToken.value && csrfToken.timestamp) {
+    const tokenAge = Date.now() - csrfToken.timestamp;
+    if (tokenAge < 30 * 60 * 1000) {
+      return csrfToken.value;
+    }
+  }
+  
+  try {
+    // Usa l'endpoint CSRF dalle variabili d'ambiente
+    const csrfEndpoint = import.meta.env.VITE_CSRF_ENDPOINT || '/csrf';
+    
+    // Richiedi un nuovo token CSRF
+    const response = await axios.get(`${API_URL}${csrfEndpoint}`, {
+      withCredentials: true // Importante per ricevere i cookie CSRF
+    });
+    
+    if (response.data && response.data.token) {
+      if (!csrfToken) csrfToken = {}; // Inizializza l'oggetto se necessario
+      csrfToken.value = response.data.token;
+      csrfToken.timestamp = Date.now();
+      return csrfToken.value;
+    }
+    
+    // Se non riceviamo un token esplicito, controlla i cookie
+    const cookies = document.cookie.split(';');
+    for (const cookie of cookies) {
+      const [name, value] = cookie.trim().split('=');
+      if (name === 'XSRF-TOKEN') {
+        if (!csrfToken) csrfToken = {}; // Inizializza l'oggetto se necessario
+        csrfToken.value = decodeURIComponent(value);
+        csrfToken.timestamp = Date.now();
+        return csrfToken.value;
       }
-    }, delay);
-  });
+    }
+    
+    console.warn('Impossibile ottenere un token CSRF');
+    return null;
+  } catch (error) {
+    console.error('Errore nel recupero del token CSRF:', error);
+    return null;
+  }
 };
 
 // Funzione per risvegliare il server
@@ -75,7 +198,7 @@ export const wakeUpServer = async () => {
         // Usa un endpoint esistente per un ping leggero
         await axios({
           method: 'OPTIONS',
-          url: 'https://backend-upsearch.onrender.com/auth/register',
+          url: `${API_URL}/auth/register`,
           timeout: 15000
         });
         
@@ -118,41 +241,92 @@ export const wakeUpServer = async () => {
   return wakingUpPromise;
 };
 
-// Interceptor per aggiungere il token JWT alle richieste
-api.interceptors.request.use(
-  (config) => {
+// Interceptor per aggiungere il token JWT a ogni richiesta
+axios.interceptors.request.use(
+  async config => {
+    // Aggiungi token JWT in tutte le richieste
     const token = localStorage.getItem('token');
-    
     if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    
-    // Aggiungi il CF-Ray ID se disponibile (per debug)
-    const cfRayId = localStorage.getItem('cf-ray');
-    if (cfRayId) {
-      config.headers['X-CF-Ray-Client'] = cfRayId;
+      config.headers['Authorization'] = `Bearer ${token}`;
     }
     
     return config;
   },
-  (error) => {
+  error => {
     return Promise.reject(error);
   }
 );
 
-// Gestisci gli errori di autenticazione
-api.interceptors.response.use(
-  (response) => response,
-  (error) => {
-    if (error.response && error.response.status === 401) {
-      // Token scaduto o non valido
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      
-      // Evita reindirizzamenti circolari se siamo già alla pagina di login
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
+// Interceptor per gestire le risposte e i possibili errori di autenticazione
+axios.interceptors.response.use(
+  response => response,
+  async error => {
+    // Se siamo offline, gestisci la risposta offline
+    if (!navigator.onLine) {
+      if (error.config && error.config.method === 'get') {
+        // Per le richieste GET, prova a recuperare dati dalla cache
+        const cachedData = CacheService.getFromCache(`request_${error.config.url}`);
+        if (cachedData) {
+          toast.info('Utilizzando dati dalla cache in modalità offline');
+          return Promise.resolve({ data: cachedData, fromCache: true });
+        }
       }
+      return Promise.reject({ ...error, offline: true });
+    }
+
+    // Gestione specifica per errori 404
+    if (error.response && error.response.status === 404) {
+      console.error('Risorsa non trovata:', error.config?.url);
+      
+      // Se si tratta di una nota (URL contiene /notes/)
+      if (error.config?.url && error.config.url.includes('/notes/')) {
+        const noteId = error.config.url.split('/notes/')[1]?.split('/')[0];
+        if (noteId) {
+          console.log(`Nota ${noteId} non trovata`);
+          
+          // Se siamo nella visualizzazione di una nota, reindirizza all'elenco delle note
+          const currentPath = window.location.pathname;
+          if (currentPath.includes(`/note/${noteId}`)) {
+            console.log('Reindirizzamento alla lista delle note');
+            window.location.href = '/note/';
+            toast.error('La nota richiesta non è disponibile');
+            return Promise.reject({ ...error, handled: true });
+          }
+        }
+      }
+    }
+    
+    // Se il token è scaduto o non valido (401 o 403)
+    if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+      // Verifica se l'errore è relativo all'autenticazione e non a CSRF o altro
+      const isAuthError = 
+        (error.response.data && error.response.data.error === 'Unauthorized') ||
+        error.response.data?.message?.includes('JWT expired') ||
+        !error.response.data?.message?.includes('CSRF');
+        
+      if (isAuthError) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        
+        // Reindirizza al login solo se non siamo già nella pagina di login
+        const currentPath = window.location.pathname;
+        if (currentPath !== '/login' && currentPath !== '/register') {
+          toast.error('La sessione è scaduta. Effettua nuovamente l\'accesso.');
+          window.location.href = '/login';
+        }
+      }
+    } else if (error.response && error.response.status === 400 && 
+               error.response.data && error.response.data.message &&
+               error.response.data.message.includes('URL non valido')) {
+      // Gestione specifica per errori di decrittografia URL
+      console.error('Errore di decrittografia URL:', error.response.data);
+      toast.error('Errore nell\'elaborazione dell\'URL. Riprova.');
+    } else if (error.code === 'ECONNABORTED') {
+      // Gestione timeout
+      toast.error('La richiesta è scaduta. Il server potrebbe essere sovraccarico.');
+    } else if (!error.response && error.request) {
+      // Gestione errori di rete (nessuna risposta)
+      toast.error('Impossibile comunicare con il server. Verifica la tua connessione.');
     }
     
     return Promise.reject(error);
@@ -205,574 +379,597 @@ const retryApiCall = async (apiCall, maxRetries = 3, delay = 1000) => {
   }
 };
 
-/**
- * Funzione per effettuare il login
- * @param {string} email - Email
- * @param {string} password - Password
- * @returns {Promise} - Promise con la risposta del server
- */
+// Funzioni API allineate con il backend
+
+// Auth API
 export const login = async (credentials) => {
   try {
-    console.log('Invio credenziali login:', credentials); // Per debug
-    
-    const response = await axios.post(`${baseURL}/auth/login`, credentials);
-    
-    console.log('Risposta login:', response.data); // Per debug
+    const response = await axios.post('/auth/login', credentials);
     return response.data;
   } catch (error) {
-    handleApiError(error);
+    console.error('Errore durante il login:', error);
     throw error;
   }
 };
 
-// Funzione per verificare l'OTP
-export const verifyOtp = async (data) => {
+export const register = async (userData) => {
   try {
-    console.log('Invio dati verifica OTP:', data);
-    
-    const response = await axios.post(`${baseURL}/auth/verify-otp`, data);
-    
+    const response = await axios.post('/auth/register', userData);
     return response.data;
   } catch (error) {
-    handleApiError(error);
+    console.error('Errore durante la registrazione:', error);
     throw error;
   }
 };
 
-/**
- * Funzione per richiedere un nuovo codice OTP
- * @param {string} email - Email
- * @returns {Promise} - Promise con la risposta del server
- */
-export const resendOtp = async (data) => {
+export const verifyOtp = async (otpData) => {
   try {
-    console.log('Invio richiesta resendOtp:', data);
-    
-    const response = await axios.post(`${baseURL}/auth/resend-otp`, data);
-    
+    const response = await axios.post('/auth/verify-otp', otpData);
     return response.data;
   } catch (error) {
-    handleApiError(error);
+    console.error('Errore durante la verifica OTP:', error);
     throw error;
   }
 };
 
-// Servizio di autenticazione
-export const authService = {
-  register: async (userData) => {
-    try {
-      const response = await api.post('/auth/register', userData);
-      toast.success('Registrazione completata! Controlla la tua email per il codice OTP');
-      return response;
-    } catch (error) {
-      let message = 'Errore durante la registrazione';
-      
-      // Se riceviamo un 500 ma l'utente potrebbe essere stato creato comunque
-      if (error.response && error.response.status === 500) {
-        // Controlliamo se l'utente è stato creato tentando il login
-        try {
-          const checkUserResponse = await api.post('/auth/check-user-exists', {
-            username: userData.username,
-            email: userData.email
-          });
-          
-          if (checkUserResponse.data.exists) {
-            toast.warning('La registrazione potrebbe essere avvenuta con successo nonostante un errore di comunicazione. Prova a verificare il tuo OTP.');
-            return { 
-              data: { 
-                message: 'Utente registrato. Controlla la tua email per il codice OTP',
-                possibleSuccess: true,
-                email: userData.email
-              } 
-            };
-          }
-        } catch (checkError) {
-          console.error('Errore nel controllo utente:', checkError);
-        }
-        
-        message = 'Errore di server durante la registrazione. L\'operazione potrebbe essere stata completata comunque. Verifica la tua email per il codice OTP o riprova.';
-      } else if (error.response && error.response.data) {
-        message = error.response.data.message || error.response.data || message;
-      } else if (error.code === 'ECONNABORTED') {
-        message = 'Il server sta impiegando troppo tempo per rispondere. Riprova tra qualche momento.';
-      } else if (!error.response) {
-        message = 'Impossibile connettersi al server. Controlla la tua connessione.';
-      }
-      
-      toast.error(message);
-      throw new Error(message);
-    }
-  },
-  
-  // Metodo per verificare se l'utente esiste (aggiunto)
-  checkUserExists: async (username, email) => {
-    try {
-      const response = await api.post('/auth/check-user-exists', { username, email });
-      return response.data.exists;
-    } catch (error) {
-      console.error('Errore nel controllo utente:', error);
-      return false;
-    }
-  },
-  
-  logout: () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('user');
-    window.location.href = '/login';
+export const resendOtp = async (userData) => {
+  try {
+    const response = await axios.post('/auth/resend-otp', userData);
+    return response.data;
+  } catch (error) {
+    console.error('Errore durante il reinvio OTP:', error);
+    throw error;
   }
 };
 
-// Servizi per le note
+// Sistema di tracciamento richieste in corso
+const pendingRequests = {};
+
+// Funzione per creare una chiave univoca per le richieste
+const createRequestKey = (method, url, data) => {
+  return `${method}_${url}_${data ? JSON.stringify(data) : ''}`;
+};
+
+// Implementa un wrapper per evitare richieste duplicate
+const dedupRequest = async (key, requestFn) => {
+  // Se c'è già una richiesta in corso con la stessa chiave, usa quella
+  if (pendingRequests[key]) {
+    console.log(`Richiesta duplicata rilevata [${key}], riutilizzo promessa esistente`);
+    return pendingRequests[key];
+  }
+
+  try {
+    // Crea e memorizza la promessa
+    pendingRequests[key] = requestFn();
+    // Attendi il risultato
+    const result = await pendingRequests[key];
+    return result;
+  } finally {
+    // Pulisci dopo la risoluzione
+    delete pendingRequests[key];
+  }
+};
+
+// Modifica getNotes per implementare cache e deduplicazione
 export const noteApi = {
-  getNotes: async () => {
+  getNotes: async (forceRefresh = false) => {
+    const requestKey = 'getNotes';
+    
+    // Usa cache se offline o se c'è già una richiesta in corso
+    if (!forceRefresh && (!navigator.onLine || window.pendingGetNotes)) {
+      // Se offline, usa cache
+      if (!navigator.onLine) {
+        const cachedNotes = CacheService.getCachedNotes();
+        if (cachedNotes && cachedNotes.length > 0) {
+          console.log('Usando note dalla cache (offline)');
+          return cachedNotes;
+        }
+      }
+      
+      // Se c'è già una richiesta in corso, attendi quella
+      if (window.pendingGetNotes) {
+        console.log('Richiesta getNotes già in corso, attendere...');
+        try {
+          return await window.pendingGetNotes;
+        } catch (error) {
+          // Se la richiesta in corso fallisce, continua con una nuova
+          console.warn('Richiesta getNotes in corso fallita, provo nuovamente');
+        }
+      }
+    }
+    
+    // Throttle le richieste
     try {
-      const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-      const userId = currentUser?.id;
+      window.pendingGetNotes = throttleApiCall(requestKey, async () => {
+        try {
+          // Codice esistente per ottenere il token CSRF e costruire l'URL
+          const csrfToken = localStorage.getItem('csrfToken');
+          let url;
+          
+          if (csrfToken) {
+            url = `/${csrfToken}/notes`;
+            console.log('Utilizzando URL con CSRF per getNotes');
+          } else {
+            url = '/api/v1/user/notes';
+            console.log('Utilizzando URL fallback per getNotes');
+          }
+          
+          const response = await axios.get(url);
+          
+          // Salva le note nella cache
+          if (response.data) {
+            CacheService.cacheNotes(response.data);
+          }
+          
+          return response.data;
+        } catch (error) {
+          console.error('Errore nel recupero delle note:', error);
+          
+          // Se siamo offline, usa la cache
+          if (!navigator.onLine) {
+            const cachedNotes = CacheService.getCachedNotes();
+            if (cachedNotes.length > 0) {
+              return cachedNotes;
+            }
+          }
+          
+          throw error;
+        } finally {
+          window.pendingGetNotes = null;
+        }
+      }, forceRefresh);
       
-      if (!userId) {
-        console.warn('Nessun utente autenticato, impossibile ottenere le note');
-        return [];
-      }
-      
-      // Usa l'endpoint standard con parametro query invece dell'endpoint specifico utente
-      // che non esiste sul backend
-      const response = await api.get('/api/notes', {
-        params: { userId: userId }
-      });
-      
-      if (response && response.data) {
-        // Doppio filtro di sicurezza lato client
-        const filteredNotes = response.data.filter(note => 
-          !note.userId || note.userId === userId || note.isTutorial === true
-        );
-        
-        console.log(`Note filtrate per utente ${userId}: ${filteredNotes.length}`);
-        return filteredNotes;
-      }
-      
-      return [];
+      return await window.pendingGetNotes;
     } catch (error) {
-      console.error('Errore nell\'ottenere le note:', error);
+      if (error.throttled) {
+        // Se throttled, torna ai dati in cache
+        console.log('Richiesta throttled, uso cache');
+        return CacheService.getCachedNotes();
+      }
+      throw error;
+    }
+  },
+  
+  getNoteById: async (id) => {
+    try {
+      // Ottieni il token CSRF per l'URL
+      const csrfToken = localStorage.getItem('csrfToken');
+      
+      // Costruisci l'URL in modo corretto
+      let url;
+      if (csrfToken) {
+        url = `/${csrfToken}/notes/${id}`;
+        console.log('Utilizzando URL con CSRF per getNoteById:', url);
+      } else {
+        // Fallback senza token CSRF
+        url = `/api/v1/user/notes/${id}`;
+        console.log('Utilizzando URL fallback per getNoteById:', url);
+      }
+      
+      console.log('Richiesta nota singola con URL:', url);
+      const response = await axios.get(url);
+      console.log('Nota recuperata con successo:', response.status);
+      return response.data;
+    } catch (error) {
+      console.error(`Errore nel recupero della nota ${id}:`, error);
+      
+      // Se è un problema di autenticazione, reindirizza al login
+      if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+        console.warn('Token non valido o scaduto, reindirizzamento al login...');
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = '/login';
+      }
+      
       throw error;
     }
   },
   
   createNote: async (noteData) => {
-    try {
-      // Per la creazione iniziale, limitiamo il contenuto
-      const initialData = {
-        ...noteData,
-        // Se il contenuto è troppo lungo, usiamo una versione troncata
-        content: noteData.content && noteData.content.length > 200 ? 
-          noteData.content.substring(0, 200) + '...' : noteData.content
-      };
-      
-      console.log("Creazione nota con contenuto iniziale...");
-      const response = await api.post('/api/notes', initialData);
-      const createdNote = response.data;
-      
-      // Se il contenuto è stato troncato e la creazione è andata a buon fine, aggiorniamo il contenuto completo
-      if (noteData.content && noteData.content.length > 200 && createdNote && createdNote.id) {
-        console.log("Aggiornamento con contenuto completo per la nota:", createdNote.id);
-        try {
-          // Suddividiamo il contenuto in chunk più piccoli se necessario
-          const contentLength = noteData.content.length;
-          const chunkSize = 100000; // Dimensione sicura per un singolo aggiornamento
-          
-          if (contentLength > chunkSize) {
-            // Se il contenuto è molto grande, lo invieremo in parti
-            console.log("Contenuto molto grande, suddivisione in parti...");
-            let finalContent = '';
-            
-            for (let i = 0; i < contentLength; i += chunkSize) {
-              const chunk = noteData.content.substring(i, Math.min(i + chunkSize, contentLength));
-              finalContent += chunk;
-              
-              // Aggiorniamo progressivamente il contenuto
-              await api.put(`/api/notes/${createdNote.id}`, {
-                content: finalContent
-              });
-            }
-          } else {
-            // Aggiornamento normale per contenuti di dimensioni gestibili
-            await api.put(`/api/notes/${createdNote.id}`, {
-              content: noteData.content
-            });
-          }
-          
-          // Recuperiamo la nota aggiornata
-          const getResponse = await api.get(`/api/notes/${createdNote.id}`);
-          return getResponse.data;
-        } catch (updateError) {
-          console.error('Errore nell\'aggiornamento del contenuto completo:', updateError);
-          return createdNote; // Restituisci comunque la nota creata
+    // Crea una chiave univoca per questa richiesta
+    const requestKey = `createNote_${JSON.stringify(noteData)}`;
+    
+    // Controllo per note tutorial duplicate
+    if (noteData.isTutorial === true || 
+        (noteData.tags && Array.isArray(noteData.tags) &&
+         noteData.tags.some(tag => ['tutorial', 'benvenuto'].includes(tag)))) {
+      try {
+        // Verifica se esiste già una nota tutorial
+        const notes = await noteApi.getNotes();
+        const existingTutorial = notes.find(note => 
+          note.isTutorial === true || 
+          (note.tags && Array.isArray(note.tags) &&
+           note.tags.some(tag => ['tutorial', 'benvenuto'].includes(tag)))
+        );
+        
+        if (existingTutorial) {
+          console.log('Nota tutorial già esistente:', existingTutorial.id);
+          return existingTutorial;
         }
+      } catch (error) {
+        console.warn('Errore durante la verifica delle note tutorial esistenti:', error);
       }
-      
-      return createdNote;
-    } catch (error) {
-      console.error('Errore nella creazione della nota:', error);
-      
-      // Strategia di fallback in caso di errore
-      if (error.response && (error.response.status === 500 || error.response.status === 413)) {
-        console.log("Tentativo di creazione con contenuto ridotto...");
-        try {
-          // Creiamo la nota con contenuto minimo
-          const minimalData = {
-            ...noteData,
-            content: 'Caricamento contenuto in corso...' // Contenuto minimo
-          };
-          const fallbackResponse = await api.post('/api/notes', minimalData);
-          const noteId = fallbackResponse.data.id;
-          
-          // Aggiorniamo gradualmente il contenuto
-          console.log("Aggiornamento graduale del contenuto...");
-          await api.put(`/api/notes/${noteId}`, { 
-            content: noteData.content.substring(0, Math.min(50000, noteData.content.length)) 
-          });
-          
-          // Recupera la nota completa
-          const getResponse = await api.get(`/api/notes/${noteId}`);
-          return getResponse.data;
-        } catch (fallbackError) {
-          console.error('Errore anche con il fallback:', fallbackError);
-          throw fallbackError;
-        }
-      }
-      
-      throw error;
     }
+    
+    return dedupRequest(requestKey, async () => {
+      try {
+        // Codice esistente per la creazione della nota
+        // Ottieni token CSRF e costruisci l'URL
+        const csrfToken = localStorage.getItem('csrfToken');
+        let url;
+        
+        if (csrfToken) {
+          url = `/${csrfToken}/notes`;
+        } else {
+          url = '/api/v1/user/notes';
+        }
+        
+        const response = await axios.post(url, noteData);
+        
+        // Aggiorna la cache con la nuova nota
+        if (response.data) {
+          CacheService.updateNoteInCache(response.data);
+        }
+        
+        return response.data;
+      } catch (error) {
+        console.error('Errore nella creazione della nota:', error);
+        
+        // Se siamo offline, crea una nota locale
+        if (!navigator.onLine) {
+          const tempNote = {
+            id: `temp-${Date.now()}`,
+            ...noteData,
+            temporary: true,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+          
+          // Salva nella cache locale
+          CacheService.updateNoteInCache(tempNote);
+          
+          return tempNote;
+        }
+        
+        throw error;
+      }
+    });
   },
   
-  updateNote: async (id, updates) => {
-    try {
-      const response = await api.put(`/api/notes/${id}`, updates);
-      return response.data;
-    } catch (error) {
-      console.error(`Errore nell'aggiornamento della nota ${id}:`, error);
-      throw error;
-    }
+  updateNote: async (id, noteData) => {
+    // Crea una chiave univoca per questa richiesta
+    const requestKey = `updateNote_${id}_${JSON.stringify(noteData)}`;
+    
+    // Debounce per le richieste di aggiornamento (300ms)
+    const debouncedUpdate = debounce(async () => {
+      return dedupRequest(requestKey, async () => {
+        try {
+          // Codice esistente per l'aggiornamento della nota
+          const csrfToken = localStorage.getItem('csrfToken');
+          let url;
+          
+          if (csrfToken) {
+            url = `/${csrfToken}/notes/${id}`;
+          } else {
+            url = `/api/v1/user/notes/${id}`;
+          }
+          
+          const response = await axios.put(url, noteData);
+          
+          // Aggiorna la cache
+          if (response.data) {
+            CacheService.updateNoteInCache(response.data);
+          }
+          
+          return response.data;
+        } catch (error) {
+          console.error('Errore nell\'aggiornamento della nota:', error);
+          
+          // Se siamo offline, aggiorna localmente
+          if (!navigator.onLine) {
+            // Ottieni la nota esistente dalla cache
+            const cachedNotes = CacheService.getCachedNotes();
+            const existingNote = cachedNotes.find(note => note.id === id);
+            
+            if (existingNote) {
+              const updatedNote = {
+                ...existingNote,
+                ...noteData,
+                updatedAt: new Date().toISOString()
+              };
+              
+              // Aggiorna la cache
+              CacheService.updateNoteInCache(updatedNote);
+              
+              return updatedNote;
+            }
+          }
+          
+          throw error;
+        }
+      });
+    }, 300);
+    
+    return debouncedUpdate();
   },
   
   deleteNote: async (id) => {
     try {
-      await api.delete(`/api/notes/${id}`);
-      return true;
-    } catch (error) {
-      console.error(`Errore nell'eliminazione della nota ${id}:`, error);
-      throw error;
-    }
-  },
-  
-  uploadAttachment: async (noteId, file) => {
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
+      // Se offline, salva l'operazione di eliminazione per la sincronizzazione futura
+      if (!navigator.onLine) {
+        console.log('Utente offline, salvataggio locale dell\'eliminazione');
+        const pendingDeletes = JSON.parse(localStorage.getItem('pendingDeletes') || '[]');
+        pendingDeletes.push({
+          type: 'delete',
+          id: id,
+          timestamp: Date.now()
+        });
+        localStorage.setItem('pendingDeletes', JSON.stringify(pendingDeletes));
+        
+        // Rimuovi la nota dalla cache locale
+        const cachedNotes = JSON.parse(localStorage.getItem('cachedNotes') || '[]');
+        const updatedCachedNotes = cachedNotes.filter(note => note.id !== id);
+        localStorage.setItem('cachedNotes', JSON.stringify(updatedCachedNotes));
+        
+        return { success: true, offline: true };
+      }
       
-      const response = await api.post(`/api/notes/${noteId}/attachments`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data'
+      // Ottieni il token CSRF per l'URL
+      const csrfToken = localStorage.getItem('csrfToken');
+      if (!csrfToken) {
+        console.warn('CSRF token mancante, tentativo di ottenerne uno nuovo');
+        try {
+          await getCsrfToken(true);
+        } catch (error) {
+          console.error('Impossibile ottenere token CSRF:', error);
         }
-      });
+      }
       
+      // Costruisci l'URL in modo corretto
+      const latestCsrf = localStorage.getItem('csrfToken');
+      let url;
+      if (latestCsrf) {
+        url = `/${latestCsrf}/notes/${id}`;
+        console.log('Utilizzando URL con CSRF per deleteNote:', url);
+      } else {
+        // Fallback senza token CSRF
+        url = `/api/v1/user/notes/${id}`;
+        console.log('Utilizzando URL fallback per deleteNote:', url);
+      }
+      
+      console.log(`Eliminazione nota ${id} con URL:`, url);
+      const response = await axios.delete(url);
+      console.log('Nota eliminata con successo:', response.status);
       return response.data;
     } catch (error) {
-      console.error('Errore nel caricamento dell\'allegato:', error);
+      console.error(`Errore nell'eliminazione della nota ${id}:`, error);
+      
+      // Se è un problema di autenticazione, reindirizza al login
+      if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+        console.warn('Token non valido o scaduto, reindirizzamento al login...');
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = '/login';
+      }
+      
       throw error;
     }
   },
   
-  deleteAttachment: async (noteId, attachmentId) => {
+  searchNotesByUser: async (query) => {
     try {
-      await api.delete(`/api/notes/${noteId}/attachments/${attachmentId}`);
-      return true;
+      // Ottieni il token CSRF per l'URL
+      const csrfToken = localStorage.getItem('csrfToken');
+      if (!csrfToken) {
+        console.warn('CSRF token mancante, tentativo di ottenerne uno nuovo');
+        try {
+          await getCsrfToken(true);
+        } catch (error) {
+          console.error('Impossibile ottenere token CSRF:', error);
+        }
+      }
+      
+      // Costruisci l'URL in modo corretto
+      const latestCsrf = localStorage.getItem('csrfToken');
+      let url;
+      if (latestCsrf) {
+        url = `/${latestCsrf}/notes?search=${encodeURIComponent(query)}`;
+        console.log('Utilizzando URL con CSRF per searchNotesByUser:', url);
+      } else {
+        // Fallback senza token CSRF
+        url = `/api/v1/user/notes?search=${encodeURIComponent(query)}`;
+        console.log('Utilizzando URL fallback per searchNotesByUser:', url);
+      }
+      
+      console.log(`Ricerca note con query '${query}' e URL:`, url);
+      const response = await axios.get(url);
+      console.log('Ricerca completata con successo:', response.status, response.data ? response.data.length + ' risultati' : 'nessun risultato');
+      return response.data;
     } catch (error) {
-      console.error('Errore nell\'eliminazione dell\'allegato:', error);
+      console.error('Errore nella ricerca delle note:', error);
+      
+      // Se è un problema di autenticazione, reindirizza al login
+      if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+        console.warn('Token non valido o scaduto, reindirizzamento al login...');
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        window.location.href = '/login';
+      }
+      
       throw error;
     }
   }
 };
 
-// Funzione per verificare lo stato della connessione
-export const checkConnection = async () => {
-  try {
-    await api.get('/ping');
-    return true;
-  } catch (error) {
-    return false;
+// User API
+export const userApi = {
+  getUserProfile: async () => {
+    try {
+      const response = await api.get('/users/profile');
+      return response.data;
+    } catch (error) {
+      console.error('Errore recupero profilo utente:', error);
+      throw error;
+    }
+  },
+  
+  updateUserProfile: async (userData) => {
+    try {
+      const response = await api.put('/users/profile', userData);
+      return response.data;
+    } catch (error) {
+      console.error('Errore aggiornamento profilo:', error);
+      throw error;
+    }
   }
 };
 
-// Cache per le note
-let notesCache = [];
-let lastFetchTime = null;
-const CACHE_TIME = 60000; // 1 minuto
+// Servizi NASA (se necessari)
+export const nasaApi = {
+  searchNasaImages: async (query) => {
+    try {
+      // Ottieni il token CSRF per l'URL
+      const csrfToken = localStorage.getItem('csrfToken');
+      const url = csrfToken 
+        ? `/${csrfToken}/nasa/search?q=${encodeURIComponent(query)}` 
+        : `/api/nasa/search?q=${encodeURIComponent(query)}`;
+      
+      console.log('Ricerca NASA con URL:', url);
+      const response = await axios.get(url);
+      return response.data;
+    } catch (error) {
+      console.error('Errore ricerca NASA:', error);
+      throw error;
+    }
+  },
+  
+  getAstronomyPictureOfDay: async (date) => {
+    try {
+      // Ottieni il token CSRF per l'URL
+      const csrfToken = localStorage.getItem('csrfToken');
+      const urlParams = date ? `?date=${date}` : '';
+      const url = csrfToken 
+        ? `/${csrfToken}/nasa/apod${urlParams}` 
+        : `/api/nasa/apod${urlParams}`;
+      
+      console.log('Richiesta APOD con URL:', url);
+      const response = await axios.get(url);
+      return response.data;
+    } catch (error) {
+      console.error('Errore recupero APOD:', error);
+      throw error;
+    }
+  }
+};
 
-// Aggiungi funzione per ottenere note dalla cache locale
+// Funzione getCachedNotes richiesta in Notepad.jsx
 export const getCachedNotes = () => {
-  try {
-    const cachedNotes = localStorage.getItem('cachedNotes');
-    if (cachedNotes) {
-      return JSON.parse(cachedNotes);
-    }
-  } catch (error) {
-    console.error('Errore nel recupero delle note dalla cache:', error);
-  }
-  return [];
+  return CacheService.getCachedNotes();
 };
 
-// Aggiungi questa funzione per controllare l'età della cache
-const getCacheAge = () => {
-  const timestamp = localStorage.getItem('noteCacheTimestamp');
-  if (!timestamp) return null;
-  
-  const age = Date.now() - parseInt(timestamp, 10);
-  return age;
-};
-
-// Funzione per throttling delle richieste API
-const throttledRequest = async (requestFn) => {
-  const now = Date.now();
-  const elapsed = now - lastRequestTime;
-  
-  if (elapsed < MIN_REQUEST_INTERVAL) {
-    await new Promise(resolve => setTimeout(resolve, MIN_REQUEST_INTERVAL - elapsed));
-  }
-  
-  lastRequestTime = Date.now();
-  return requestFn();
-};
-
-// Ottimizzazione della funzione getNotes per prioritizzare le chiamate online
-const getNotes = async () => {
-  try {
-    // Ottieni l'utente corrente
-    const userStr = localStorage.getItem('user');
-    if (!userStr) {
-      console.warn('Utente non autenticato, impossibile recuperare note');
-      return [];
-    }
-    
-    const user = JSON.parse(userStr);
-    if (!user || !user.id) {
-      console.warn('Dati utente non validi');
-      return [];
-    }
-    
-    console.log(`Tentativo di caricamento note per utente: ${user.id}`);
-    
-    // Modifica: usa il parametro di query invece del path parameter
-    try {
-      const response = await api.get('/api/notes', { 
-        params: { userId: user.id },
-        timeout: 20000 // Timeout più breve per questa richiesta specifica
-      });
-      
-      if (response.data) {
-        console.log(`Note caricate dal server: ${response.data.length}`);
-        // Aggiorna la cache solo se la richiesta ha successo
-        localStorage.setItem('cachedNotes', JSON.stringify(response.data));
-        localStorage.setItem('noteCacheTimestamp', Date.now().toString());
-        return response.data;
-      }
-    } catch (serverError) {
-      console.error('Errore nella richiesta al server:', serverError);
-      
-      // Se la richiesta al server fallisce, controlla la cache
-      const cachedData = getCachedNotes();
-      const cacheAge = getCacheAge();
-      
-      if (cachedData && cachedData.length > 0 && cacheAge && cacheAge < CACHE_TTL) {
-        console.log(`Fallback alla cache: ${cachedData.length} note, età cache: ${Math.round(cacheAge/1000)}s`);
-        toast.warning('Impossibile connettersi al server, utilizzo dati in cache');
-        return cachedData.filter(note => !note.userId || note.userId === user.id);
-      } else {
-        // Se non ci sono dati in cache o sono troppo vecchi, propaga l'errore
-        toast.error('Impossibile caricare le note dal server e nessun dato locale disponibile');
-        throw serverError;
-      }
-    }
-  } catch (error) {
-    console.error('Errore generale nel recupero delle note:', error);
-    throw error;
-  }
-};
-
-// Assicuriamoci di esporre questa funzione
-export { getNotes };
-
-// Ottimizzazione della funzione createNote per gestire contenuti più lunghi
-const createNote = async (noteData) => {
-  try {
-    // Per la creazione iniziale, limitiamo il contenuto
-    const initialData = {
-      ...noteData,
-      // Se il contenuto è troppo lungo, usiamo una versione troncata
-      content: noteData.content && noteData.content.length > 200 ? 
-        noteData.content.substring(0, 200) + '...' : noteData.content
-    };
-    
-    console.log("Creazione nota con contenuto iniziale...");
-    const response = await api.post('/api/notes', initialData);
-    const createdNote = response.data;
-    
-    // Se il contenuto è stato troncato e la creazione è andata a buon fine, aggiorniamo il contenuto completo
-    if (noteData.content && noteData.content.length > 200 && createdNote && createdNote.id) {
-      console.log("Aggiornamento con contenuto completo per la nota:", createdNote.id);
-      try {
-        // Suddividiamo il contenuto in chunk più piccoli se necessario
-        const contentLength = noteData.content.length;
-        const chunkSize = 100000; // Dimensione sicura per un singolo aggiornamento
-        
-        if (contentLength > chunkSize) {
-          // Se il contenuto è molto grande, lo invieremo in parti
-          console.log("Contenuto molto grande, suddivisione in parti...");
-          let finalContent = '';
-          
-          for (let i = 0; i < contentLength; i += chunkSize) {
-            const chunk = noteData.content.substring(i, Math.min(i + chunkSize, contentLength));
-            finalContent += chunk;
-            
-            // Aggiorniamo progressivamente il contenuto
-            await api.put(`/api/notes/${createdNote.id}`, {
-              content: finalContent
-            });
-          }
-        } else {
-          // Aggiornamento normale per contenuti di dimensioni gestibili
-          await api.put(`/api/notes/${createdNote.id}`, {
-            content: noteData.content
-          });
-        }
-        
-        // Recuperiamo la nota aggiornata
-        const getResponse = await api.get(`/api/notes/${createdNote.id}`);
-        return getResponse.data;
-      } catch (updateError) {
-        console.error('Errore nell\'aggiornamento del contenuto completo:', updateError);
-        return createdNote; // Restituisci comunque la nota creata
-      }
-    }
-    
-    return createdNote;
-  } catch (error) {
-    console.error('Errore nella creazione della nota:', error);
-    
-    // Strategia di fallback in caso di errore
-    if (error.response && (error.response.status === 500 || error.response.status === 413)) {
-      console.log("Tentativo di creazione con contenuto ridotto...");
-      try {
-        // Creiamo la nota con contenuto minimo
-        const minimalData = {
-          ...noteData,
-          content: 'Caricamento contenuto in corso...' // Contenuto minimo
-        };
-        const fallbackResponse = await api.post('/api/notes', minimalData);
-        const noteId = fallbackResponse.data.id;
-        
-        // Aggiorniamo gradualmente il contenuto
-        console.log("Aggiornamento graduale del contenuto...");
-        await api.put(`/api/notes/${noteId}`, { 
-          content: noteData.content.substring(0, Math.min(50000, noteData.content.length)) 
-        });
-        
-        // Recupera la nota completa
-        const getResponse = await api.get(`/api/notes/${noteId}`);
-        return getResponse.data;
-      } catch (fallbackError) {
-        console.error('Errore anche con il fallback:', fallbackError);
-        throw fallbackError;
-      }
-    }
-    
-    throw error;
-  }
-};
-
-// Ottimizza updateNote per essere più affidabile
-export const updateNote = debounce(async (id, noteData) => {
-  try {
-    // Prima di aggiornare, verifica che il server sia raggiungibile
-    let serverAvailable = false;
-    try {
-      serverAvailable = await checkServerStatus();
-    } catch (e) {
-      serverAvailable = false;
-    }
-    
-    if (!serverAvailable) {
-      toast.warning('Server non raggiungibile. Il salvataggio sarà ritardato.');
-      
-      // Memorizza la modifica per sincronizzarla in seguito
-      const pendingUpdates = JSON.parse(localStorage.getItem('pendingUpdates') || '[]');
-      localStorage.setItem('pendingUpdates', JSON.stringify([
-        ...pendingUpdates.filter(p => p.id !== id), // Rimuove aggiornamenti precedenti per la stessa nota
-        { id, data: noteData, timestamp: Date.now() }
-      ]));
-      
-      // Rifiuta la promessa per evitare che il componente pensi che tutto sia andato bene
-      return Promise.reject(new Error('Server non raggiungibile'));
-    }
-    
-    // Se il server è disponibile, procedi con l'aggiornamento
-    const response = await api.put(`/api/notes/${id}`, noteData);
-    
-    // Aggiorna la cache
-    const cachedNotes = getCachedNotes();
-    if (cachedNotes.length > 0) {
-      const updatedNotes = cachedNotes.map(note => 
-        note.id === id ? { ...note, ...response.data } : note
-      );
-      localStorage.setItem('cachedNotes', JSON.stringify(updatedNotes));
-      localStorage.setItem('noteCacheTimestamp', Date.now().toString());
-    }
-    
-    return response.data;
-  } catch (error) {
-    console.error(`Errore nell'aggiornamento della nota ${id}:`, error);
-    throw error;
-  }
-}, 800); // 800ms di debounce
-
-export const deleteNote = async (id) => {
-  try {
-    await api.delete(`/api/notes/${id}`);
-    return true;
-  } catch (error) {
-    throw error;
-  }
-};
-
-// Aggiungi questa funzione in api.js
+// Utility per verificare la connessione al server
 export const checkServerStatus = async () => {
   try {
-    // Usa un endpoint esistente che restituisce una risposta leggera
-    // Ad esempio, possiamo usare un tentativo di preflight OPTIONS su auth/register
-    const response = await axios({
-      method: 'OPTIONS',
-      url: 'https://backend-upsearch.onrender.com/auth/register',
-      timeout: 15000,
-      headers: { 'Cache-Control': 'no-cache' }
-    });
-    return true; // Server online
+    const start = Date.now();
+    await api.get('/auth/health', { timeout: 5000 });
+    const responseTime = Date.now() - start;
+    return {
+      online: true,
+      responseTime
+    };
   } catch (error) {
-    console.error('Errore nella verifica dello stato del server:', error);
-    return false; // Server offline o errore
+    return {
+      online: false,
+      error: error.message
+    };
   }
 };
 
-const getUserData = async () => {
-  // Prova a recuperare i dati dalla cache locale
-  const cachedUser = localStorage.getItem('user');
-  if (cachedUser) {
-    return JSON.parse(cachedUser);
+// Funzione per validare il token
+export const validateToken = async () => {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) return false;
+
+    const response = await axios.get(`${API_URL}/auth/validate-token`, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      },
+      timeout: 5000
+    });
+    
+    return response.status === 200;
+  } catch (error) {
+    if (error.response && (error.response.status === 401 || error.response.status === 403)) {
+      // Token scaduto o non valido - puliamo lo storage
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      
+      // Solo se non siamo già nella pagina di login, mostriamo il toast
+      if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
+        toast.error('La tua sessione è scaduta. Effettua nuovamente il login.');
+        // Reindirizzo alla pagina di login
+        window.location.href = '/login';
+      }
+      
+      return false;
+    }
+    
+    // Per altri errori, consideriamo il token ancora valido
+    console.warn('Errore nella validazione del token:', error);
+    return true;
+  }
+};
+
+// Funzione per verificare se l'utente è autenticato e reindirizzare se necessario
+export const checkAuthentication = (navigateCallback) => {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    if (navigateCallback) {
+      navigateCallback('/login');
+    } else {
+      window.location.href = '/login';
+    }
+    return false;
   }
   
-  // Se non ci sono dati in cache, recuperali dal server
-  const response = await api.get('/user/me');
-  localStorage.setItem('user', JSON.stringify(response.data));
-  return response.data;
+  // Verifica se siamo online per validare il token
+  if (navigator.onLine) {
+    validateToken().catch(() => {
+      // Se validateToken fallisce completamente, consideriamo valido il token
+      // La funzione stessa gestisce già il caso di token non valido
+    });
+  }
+  
+  return true;
 };
 
 // Esporta l'istanza di axios configurata
 export default api;
+
+// Modifica initializeAxios per includere la gestione CSRF
+export const initializeAxios = () => {
+  // ... existing code ...
+  
+  // Aggiungi intercettore per gestire il token CSRF
+  axios.interceptors.request.use(
+    async (config) => {
+      // Salta la richiesta CSRF stessa per evitare loop infiniti
+      if (config.url.includes('/api/csrf')) {
+        return config;
+      }
+      
+      // Per richieste che modificano lo stato, assicurarsi che il token CSRF sia presente
+      if (['post', 'put', 'delete'].includes(config.method)) {
+        if (!axios.defaults.headers.common['X-CSRF-TOKEN']) {
+          await getCsrfToken();
+        }
+      }
+      return config;
+    },
+    (error) => Promise.reject(error)
+  );
+  
+  // ... existing code ...
+};
+

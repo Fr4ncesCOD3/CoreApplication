@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Form, Button, Card, Container, Row, Col } from 'react-bootstrap';
 import { Link, useNavigate } from 'react-router-dom';
-import { authService, verifyOtp, resendOtp } from '../../utils/api';
+import { register, verifyOtp, resendOtp, getCsrfToken } from '../../utils/api';
 import { toast, showNotification } from '../../utils/notification';
 import './AuthCard.css';
+import axios from 'axios';
+// Importiamo icone
+import { BsShieldLock, BsEnvelope, BsPerson, BsKey, BsArrowRightCircle, BsCheck2Circle, BsClock } from 'react-icons/bs';
 
 const Register = () => {
   const navigate = useNavigate();
@@ -24,12 +27,14 @@ const Register = () => {
   const [error, setError] = useState('');
   const [resending, setResending] = useState(false);
   const [verified, setVerified] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
 
   useEffect(() => {
     // Controlla se l'utente è già autenticato
     const token = localStorage.getItem('token');
     if (token) {
-      navigate('/notepad');
+      navigate('/note/');
     }
   }, [navigate]);
 
@@ -103,105 +108,168 @@ const Register = () => {
       return;
     }
     
-    setLoading(true);
+    setIsSubmitting(true);
     
     try {
-      const toastId = toast.info('Connessione al server in corso...', {
-        autoClose: false
-      });
-      
-      const response = await authService.register({
-        username,
+      // Log diagnostici
+      console.log('Tentativo di registrazione con:', { 
+        username, 
         email,
-        password
+        password: '***' // Non loggare la password reale
       });
       
-      toast.dismiss(toastId);
+      // Rimuovi intestazioni non necessarie per evitare problemi CORS
+      const response = await axios.post('/auth/register', 
+        { username, email, password },
+        { 
+          headers: {
+            'Content-Type': 'application/json'
+            // Senza X-XSRF-TOKEN o altri header problematici
+          }
+        }
+      );
       
-      if (response.data) {
-        toast.success(response.data.message || 'Registrazione completata. Controlla la tua email per il codice OTP');
+      console.log('Risposta registrazione completa:', response);
+      
+      if (response && response.data) {
         setShowOtpForm(true);
         
-        // Salva l'email per la verifica OTP anche se è fallita la registrazione ma l'utente esiste
-        if (response.data.possibleSuccess) {
-          console.log('Registrazione potenzialmente completata nonostante errore di comunicazione');
+        showNotification({
+          type: 'success',
+          message: 'Registrazione iniziata! Controlla la tua email per il codice OTP.'
+        });
+        
+        if (response.data.testOtp) {
+          showNotification({
+            type: 'info',
+            message: `Codice OTP di test: ${response.data.testOtp}`,
+            autoClose: false
+          });
         }
       }
     } catch (error) {
-      const errorMessage = error.message || 'Errore durante la registrazione';
+      // Log dettagliato dell'errore
+      console.error('Errore durante la registrazione:', error);
+      console.error('Dettagli errore:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        headers: error.response?.headers
+      });
       
-      // Gestisci errori specifici
-      if (errorMessage.includes('username')) {
-        setUsernameError(errorMessage);
-      } else if (errorMessage.includes('email')) {
-        setEmailError(errorMessage);
-      } else if (errorMessage.includes('password')) {
-        setPasswordError(errorMessage);
-      } else if (errorMessage.includes('server') || 
-                 errorMessage.includes('500') || 
-                 errorMessage.includes('completata comunque')) {
-        // Potrebbe essere un errore del TimeoutFilter che non ha influenzato la registrazione
-        setShowOtpForm(true);
-        toast.warning('Prova a verificare il tuo OTP. Se non funziona, riprova la registrazione.');
-      }
-      
-      // Gestione speciale per l'errore 500 del TimeoutFilter
-      if (error.response && error.response.status === 500) {
-        // Controlla se l'utente è stato creato
-        setTimeout(async () => {
-          try {
-            const exists = await authService.checkUserExists(username, email);
-            if (exists) {
-              toast.info('Username o email già registrati. Puoi procedere con la verifica OTP o il login.');
-              setShowOtpForm(true);
-            }
-          } catch (checkError) {
-            console.error('Errore nel controllo utente:', checkError);
+      if (error.response) {
+        const { status, data } = error.response;
+        
+        if (status === 400) {
+          // Gestisci errori di validazione
+          if (data.errors) {
+            data.errors.forEach(err => {
+              if (err.field === 'username') setUsernameError(err.message);
+              if (err.field === 'email') setEmailError(err.message);
+              if (err.field === 'password') setPasswordError(err.message);
+            });
+          } else {
+            setError(data.message || 'Errore nella registrazione');
           }
-        }, 1000);
+        } else if (status === 409) {
+          if (data.message && data.message.includes('email')) {
+            setEmailError('Email già in uso');
+          } else if (data.message && data.message.includes('username')) {
+            setUsernameError('Username già in uso');
+          } else {
+            setError(data.message || 'Utente già esistente');
+          }
+        } else if (status === 403) {
+          setError('Errore di autorizzazione. Ricarica la pagina e riprova.');
+        } else if (status === 500) {
+          setError('Errore del server. Per favore riprova più tardi.');
+        } else {
+          setError(data.message || 'Errore del server. Riprova più tardi.');
+        }
+      } else {
+        setError('Impossibile contattare il server. Verifica la tua connessione.');
       }
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
   const handleVerifyOtp = async (e) => {
     e.preventDefault();
+    setIsVerifyingOtp(true);
     setVerifying(true);
     
     try {
-      console.log('Verifica OTP per username:', username, 'con codice:', otp);
-      
-      // Assicurati di inviare sia username che email
-      const response = await verifyOtp({
-        username: username,
-        email: email,  // Aggiungi email per sicurezza
-        otp: otp
+      const response = await axios.post('/auth/verify-otp', {
+        email,
+        otp
       });
       
-      console.log('Risposta verifica OTP:', response);
-      
-      if (response && response.token) {
-        // Salva il token e le informazioni dell'utente
-        localStorage.setItem('token', response.token);
-        localStorage.setItem('user', JSON.stringify(response.user));
+      if (response.data && response.data.token) {
+        localStorage.setItem('token', response.data.token);
         
-        setVerified(true);
-        showNotification({
-          type: 'success',
-          message: 'Registrazione completata con successo!'
-        });
+        // Salva i dati utente
+        if (response.data.user) {
+          localStorage.setItem('user', JSON.stringify(response.data.user));
+        } else {
+          const userData = {
+            id: Math.random().toString(36).substring(2, 15),
+            username: username,
+            email: email,
+            roles: ['ROLE_USER']
+          };
+          localStorage.setItem('user', JSON.stringify(userData));
+        }
         
-        // Reindirizza l'utente alla pagina Notepad
-        navigate('/note');
+        // Ottieni il token CSRF e ATTENDI che sia completato
+        try {
+          const csrfResponse = await axios.get('/csrf', {
+            headers: {
+              'Authorization': `Bearer ${response.data.token}`
+            }
+          });
+          
+          if (csrfResponse.data && csrfResponse.data.token) {
+            localStorage.setItem('csrfToken', csrfResponse.data.token);
+            console.log('Token CSRF salvato:', csrfResponse.data.token);
+            
+            // Solo dopo aver salvato il token CSRF, imposta il flag di successo
+            setRegistrationSuccess(true);
+            
+            showNotification({
+              type: 'success',
+              message: 'Registrazione completata con successo!'
+            });
+            
+            // Reindirizza dopo un breve ritardo per assicurarsi che tutto sia caricato
+            setTimeout(() => {
+              navigate('/note/');
+            }, 1500);
+          }
+        } catch (csrfError) {
+          console.error('Impossibile ottenere token CSRF:', csrfError);
+          toast.warning('Problemi con l\'autenticazione. Potresti dover effettuare nuovamente il login.');
+          navigate('/login');
+        }
       }
     } catch (error) {
       console.error('Errore durante la verifica OTP:', error);
-      showNotification({
-        type: 'error',
-        message: 'Codice OTP non valido. Riprova.'
-      });
+      
+      if (error.response) {
+        const { status, data } = error.response;
+        
+        if (status === 400) {
+          setOtpError(data.message || 'Codice OTP non valido');
+        } else if (status === 401) {
+          setOtpError('Codice OTP scaduto o non valido');
+        } else {
+          setOtpError('Errore durante la verifica. Riprova.');
+        }
+      } else {
+        setOtpError('Impossibile contattare il server. Riprova più tardi.');
+      }
     } finally {
+      setIsVerifyingOtp(false);
       setVerifying(false);
     }
   };
@@ -247,15 +315,13 @@ const Register = () => {
   // Se la registrazione è avvenuta con successo, mostra un messaggio di reindirizzamento
   if (registrationSuccess) {
     return (
-      <Container>
+      <Container className="auth-container">
         <Row className="justify-content-center">
-          <Col md={6}>
+          <Col md={6} lg={5}>
             <Card className="auth-card">
-              <Card.Body className="text-center">
+              <Card.Body className="text-center success-message">
                 <div className="my-4">
-                  <div className="spinner-border text-primary mb-3" role="status">
-                    <span className="visually-hidden">Caricamento...</span>
-                  </div>
+                  <BsCheck2Circle className="success-icon" />
                   <h4>Registrazione completata con successo</h4>
                   <p>Stai per essere reindirizzato all'area personale...</p>
                 </div>
@@ -268,128 +334,208 @@ const Register = () => {
   }
 
   return (
-    <Container>
+    <Container className="auth-container">
       <Row className="justify-content-center">
-        <Col md={6}>
+        <Col md={6} lg={5}>
           <Card className="auth-card">
             <Card.Body>
               <Card.Title className="text-center mb-4">
-                {showOtpForm ? 'Verifica il codice OTP' : 'Registrazione'}
+                {showOtpForm ? (
+                  <>
+                    <BsShieldLock className="mb-2" style={{ fontSize: "2rem", color: "var(--primary-color, #6c5ce7)" }} />
+                    <div>Verifica il codice OTP</div>
+                  </>
+                ) : (
+                  <>
+                    <BsPerson className="mb-2" style={{ fontSize: "2rem", color: "var(--primary-color, #6c5ce7)" }} />
+                    <div>Registrazione</div>
+                  </>
+                )}
               </Card.Title>
               
               {!showOtpForm ? (
                 <Form onSubmit={handleRegister}>
-                  <Form.Group className="mb-3">
-                    <Form.Label>Username</Form.Label>
-                    <Form.Control
-                      type="text"
-                      name="username"
-                      value={username}
-                      onChange={handleChange}
-                      required
-                      placeholder="Scegli uno username"
-                      isInvalid={!!usernameError}
-                    />
-                    {usernameError && <Form.Control.Feedback type="invalid">{usernameError}</Form.Control.Feedback>}
-                  </Form.Group>
+                  <Row>
+                    <Col xs={12}>
+                      <Form.Group className="mb-3">
+                        <Form.Label>
+                          <BsPerson className="me-2" />
+                          Username
+                        </Form.Label>
+                        <Form.Control
+                          type="text"
+                          name="username"
+                          value={username}
+                          onChange={handleChange}
+                          required
+                          placeholder="Scegli uno username"
+                          isInvalid={!!usernameError}
+                        />
+                        {usernameError && <Form.Control.Feedback type="invalid">{usernameError}</Form.Control.Feedback>}
+                      </Form.Group>
+                    </Col>
 
-                  <Form.Group className="mb-3">
-                    <Form.Label>Email</Form.Label>
-                    <Form.Control
-                      type="email"
-                      name="email"
-                      value={email}
-                      onChange={handleChange}
-                      required
-                      placeholder="Inserisci la tua email"
-                      autoComplete="username"
-                      isInvalid={!!emailError}
-                    />
-                    {emailError && <Form.Control.Feedback type="invalid">{emailError}</Form.Control.Feedback>}
-                  </Form.Group>
+                    <Col xs={12}>
+                      <Form.Group className="mb-3">
+                        <Form.Label>
+                          <BsEnvelope className="me-2" />
+                          Email
+                        </Form.Label>
+                        <Form.Control
+                          type="email"
+                          name="email"
+                          value={email}
+                          onChange={handleChange}
+                          required
+                          placeholder="Inserisci la tua email"
+                          autoComplete="username"
+                          isInvalid={!!emailError}
+                        />
+                        {emailError && <Form.Control.Feedback type="invalid">{emailError}</Form.Control.Feedback>}
+                      </Form.Group>
+                    </Col>
 
-                  <Form.Group className="mb-3">
-                    <Form.Label>Password</Form.Label>
-                    <Form.Control
-                      type="password"
-                      name="password"
-                      value={password}
-                      onChange={handleChange}
-                      required
-                      placeholder="Crea una password"
-                      autoComplete="new-password"
-                      isInvalid={!!passwordError}
-                    />
-                    {passwordError && <Form.Control.Feedback type="invalid">{passwordError}</Form.Control.Feedback>}
-                  </Form.Group>
+                    <Col xs={12}>
+                      <Form.Group className="mb-3">
+                        <Form.Label>
+                          <BsKey className="me-2" />
+                          Password
+                        </Form.Label>
+                        <Form.Control
+                          type="password"
+                          name="password"
+                          value={password}
+                          onChange={handleChange}
+                          required
+                          placeholder="Crea una password"
+                          autoComplete="new-password"
+                          isInvalid={!!passwordError}
+                        />
+                        {passwordError && <Form.Control.Feedback type="invalid">{passwordError}</Form.Control.Feedback>}
+                      </Form.Group>
+                    </Col>
 
-                  <Form.Group className="mb-4">
-                    <Form.Label>Conferma Password</Form.Label>
-                    <Form.Control
-                      type="password"
-                      name="confirmPassword"
-                      value={confirmPassword}
-                      onChange={handleChange}
-                      required
-                      placeholder="Conferma la tua password"
-                      autoComplete="new-password"
-                      isInvalid={!!confirmPasswordError}
-                    />
-                    {confirmPasswordError && <Form.Control.Feedback type="invalid">{confirmPasswordError}</Form.Control.Feedback>}
-                  </Form.Group>
+                    <Col xs={12}>
+                      <Form.Group className="mb-4">
+                        <Form.Label>
+                          <BsShieldLock className="me-2" />
+                          Conferma Password
+                        </Form.Label>
+                        <Form.Control
+                          type="password"
+                          name="confirmPassword"
+                          value={confirmPassword}
+                          onChange={handleChange}
+                          required
+                          placeholder="Conferma la tua password"
+                          autoComplete="new-password"
+                          isInvalid={!!confirmPasswordError}
+                        />
+                        {confirmPasswordError && <Form.Control.Feedback type="invalid">{confirmPasswordError}</Form.Control.Feedback>}
+                      </Form.Group>
+                    </Col>
 
-                  <Button 
-                    variant="primary" 
-                    type="submit" 
-                    className="w-100 py-2" 
-                    disabled={loading}
-                  >
-                    {loading ? 'Registrazione in corso...' : 'Registrati'}
-                  </Button>
+                    {error && (
+                      <Col xs={12}>
+                        <div className="alert alert-danger mb-3" role="alert">
+                          {error}
+                        </div>
+                      </Col>
+                    )}
+
+                    <Col xs={12} className="d-grid">
+                      <Button 
+                        variant="primary" 
+                        type="submit" 
+                        className="py-2" 
+                        disabled={loading || isSubmitting}
+                      >
+                        {isSubmitting ? (
+                          <>
+                            <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                            Registrazione in corso...
+                          </>
+                        ) : (
+                          <>
+                            <BsArrowRightCircle className="me-2" />
+                            Registrati
+                          </>
+                        )}
+                      </Button>
+                    </Col>
+                  </Row>
                   
-                  <div className="text-center mt-3">
+                  <div className="auth-links">
                     Hai già un account? <Link to="/login">Accedi</Link>
                   </div>
                 </Form>
               ) : (
-                <Form onSubmit={handleVerifyOtp}>
-                  <div className="text-center mb-3">
-                    <p>Abbiamo inviato un codice di verifica alla tua email:</p>
-                    <p className="fw-bold">{email}</p>
-                  </div>
-                  
-                  <Form.Group className="mb-4">
-                    <Form.Label>Codice OTP</Form.Label>
-                    <Form.Control
-                      type="text"
-                      name="otp"
-                      value={otp}
-                      onChange={handleChange}
-                      required
-                      placeholder="Inserisci il codice OTP ricevuto via email"
-                      isInvalid={!!otpError}
-                      autoComplete="one-time-code"
-                    />
-                    {otpError && <Form.Control.Feedback type="invalid">{otpError}</Form.Control.Feedback>}
-                  </Form.Group>
+                <Form onSubmit={handleVerifyOtp} className="otp-section">
+                  <Row className="justify-content-center">
+                    <Col xs={12} className="text-center">
+                      <p>Abbiamo inviato un codice di verifica alla tua email:</p>
+                      <p className="otp-email">{email}</p>
+                    </Col>
+                    
+                    <Col xs={12} sm={10} md={8}>
+                      <Form.Group className="mb-4">
+                        <Form.Label className="text-center w-100">Codice OTP</Form.Label>
+                        <Form.Control
+                          type="text"
+                          name="otp"
+                          value={otp}
+                          onChange={handleChange}
+                          required
+                          placeholder="Inserisci il codice"
+                          isInvalid={!!otpError}
+                          autoComplete="one-time-code"
+                          className="otp-input"
+                          maxLength="6"
+                        />
+                        {otpError && <Form.Control.Feedback type="invalid">{otpError}</Form.Control.Feedback>}
+                      </Form.Group>
+                    </Col>
 
-                  <Button 
-                    variant="primary" 
-                    type="submit" 
-                    className="w-100 py-2" 
-                    disabled={verifying}
-                  >
-                    {verifying ? 'Verifica in corso...' : 'Verifica OTP'}
-                  </Button>
+                    <Col xs={12} className="d-grid">
+                      <Button 
+                        variant="primary" 
+                        type="submit" 
+                        className="py-2" 
+                        disabled={verifying}
+                      >
+                        {verifying ? (
+                          <>
+                            <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                            Verifica in corso...
+                          </>
+                        ) : (
+                          <>
+                            <BsShieldLock className="me-2" />
+                            Verifica OTP
+                          </>
+                        )}
+                      </Button>
+                    </Col>
+                  </Row>
                   
-                  <div className="text-center mt-3">
+                  <div className="text-center mt-4">
                     <Button 
                       variant="link" 
                       onClick={handleResendOtp} 
                       disabled={resending}
                       className="p-0"
                     >
-                      Non hai ricevuto il codice? Invia di nuovo
+                      {resending ? (
+                        <>
+                          <BsClock className="me-1" />
+                          Invio in corso...
+                        </>
+                      ) : (
+                        <>
+                          <BsEnvelope className="me-1" />
+                          Non hai ricevuto il codice? Invia di nuovo
+                        </>
+                      )}
                     </Button>
                   </div>
                 </Form>

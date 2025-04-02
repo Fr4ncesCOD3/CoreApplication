@@ -110,6 +110,10 @@ addStyles();
 // ID univoco per le notifiche
 let notificationId = 0;
 
+// Aggiungi un sistema di throttling per le notifiche
+let lastNotificationTime = {};
+const NOTIFICATION_THROTTLE = 5000; // 5 secondi tra notifiche simili
+
 // Gestione delle notifiche
 class NotificationManager {
   constructor() {
@@ -124,6 +128,40 @@ class NotificationManager {
   createNotification(message, type, options = {}) {
     const id = ++notificationId;
     const autoClose = options.autoClose !== undefined ? options.autoClose : 5000;
+    
+    // Genera una chiave basata su tipo e messaggio
+    const notificationKey = `${type}_${message}`;
+    
+    // Controlla se è già stata mostrata una notifica simile recentemente
+    const now = Date.now();
+    if (lastNotificationTime[notificationKey] && 
+        now - lastNotificationTime[notificationKey] < NOTIFICATION_THROTTLE) {
+      console.log('Notifica simile mostrata di recente, ignoro:', message);
+      return null;
+    }
+    
+    // Registra il momento in cui è stata mostrata questa notifica
+    lastNotificationTime[notificationKey] = now;
+    
+    // Controlla se esiste già una notifica con lo stesso messaggio e tipo
+    let isDuplicate = false;
+    this.notifications.forEach((notification) => {
+      const content = notification.element.querySelector('.notification-content');
+      if (content && content.textContent === message && notification.element.classList.contains(type)) {
+        isDuplicate = true;
+        // Resetta il timer per la notifica esistente
+        if (notification.timeout) {
+          clearTimeout(notification.timeout);
+          notification.timeout = setTimeout(() => {
+            this.dismiss(notification.id);
+          }, autoClose);
+        }
+        return;
+      }
+    });
+    
+    // Se è una notifica duplicata, non crearla di nuovo
+    if (isDuplicate) return null;
     
     // Limite massimo di notifiche visualizzate contemporaneamente
     if (this.notifications.size >= this.maxNotifications) {

@@ -44,22 +44,47 @@
 }
 
 :root {
+  /* Nuove variabili */
+  --bg-color: #ffffff;
+  --text-color: #333333;
+  --text-muted: #6c757d;
+  --border-color: #e0e0e0;
+  --input-bg: #f8f9fa;
+  --input-focus-bg: #ffffff;
   --primary-color: #6c5ce7;
-  --primary-hover: #5348b8;
-  --accent-color: #6c5ce7;
-  --text-primary: #333;
-  --text-secondary: #666;
-  --bg-primary: #fff;
-  --bg-secondary: #f8f9fa;
-  --border-color: #dee2e6;
-  --input-bg: #fff;
-  --success-color: #28a745;
-  --danger-color: #dc3545;
-  --warning-color: #ffc107;
-  --info-color: #17a2b8;
+  --primary-hover: #5649c9;
+  --primary-light: #e9e6ff;
+  --primary-disabled: #a39ddb;
+  --secondary-color: #8c8be0;
+  --success-color: #2ecc71;
+  --info-color: #3498db;
+  --warning-color: #f39c12;
+  --danger-color: #e74c3c;
+  --danger-light: #fdeded;
+  --light-bg: #f0f0f0;
+  --dark-border: #343a40;
+  --card-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  
+  --transition-fast: 0.2s ease;
+  --transition-medium: 0.3s ease;
+  --transition-slow: 0.5s ease;
+  
+  --border-radius-sm: 4px;
+  --border-radius-md: 8px;
+  --border-radius-lg: 12px;
   --sidebar-width: 250px;
   --toolbar-height: 50px;
   --shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  
+  /* Mappatura alle vecchie variabili */
+  --bg-primary: var(--bg-color);
+  --bg-secondary: #f8f9fa;
+  --text-primary: var(--text-color);
+  --text-secondary: #6c757d;
+  --accent-color: var(--primary-color);
+  
+  /* Variabili specifiche per componenti */
+  --sidebar-bg: #f5f5f5;
 }
 
 /* Regolazione della larghezza della sidebar per diverse dimensioni dello schermo */
@@ -81,29 +106,54 @@
   }
 }
 
-[data-theme="dark"] {
-  --primary-color: #7d6fdd;
-  --primary-hover: #6658d3;
-  --accent-color: #7d6fdd;
-  --text-primary: #f8f9fa;
+[data-theme="dark"], 
+[data-bs-theme="dark"] {
+  /* Nuove variabili */
+  --bg-color: #1e2126;
+  --text-color: #e9ecef;
+  --text-muted: #adb5bd;
+  --border-color: #3e4247;
+  --input-bg: #2c3038;
+  --input-focus-bg: #343a40;
+  --primary-color: #7a6ff0;
+  --primary-hover: #8f7eff;
+  --primary-light: #4a4180;
+  --primary-disabled: #5d5794;
+  --secondary-color: #8596a0;
+  --success-color: #29c971;
+  --info-color: #4fb3ff;
+  --warning-color: #f7b731;
+  --danger-color: #ff6b6b;
+  --danger-light: #4b2c2c;
+  --light-bg: #343a40;
+  --dark-bg: #2d3436;
+  --dark-border: #454b52;
+  --dark-input-bg: #373d3f;
+  --dark-input-focus: #3d4548;
+  --dark-light-bg: #373d3f;
+  --dark-text: #e6e6e6;
+  --dark-danger-light: #4b2c2c;
+  --danger-light-color: #ff6b6b;
+  --card-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  
+  /* Mappatura alle vecchie variabili */
+  --bg-primary: var(--bg-color);
+  --bg-secondary: #2d3036;
+  --text-primary: var(--text-color);
   --text-secondary: #adb5bd;
-  --bg-primary: #343a40;
-  --bg-secondary: #212529;
-  --border-color: #495057;
-  --input-bg: #2a3136;
-  --success-color: #2fb748;
-  --danger-color: #e74c3c;
-  --warning-color: #f1c40f;
-  --info-color: #3498db;
-  --shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  --accent-color: var(--primary-color);
+  
+  /* Variabili specifiche per componenti */
+  --sidebar-bg: #252830;
 }
 
 .app {
-  width: 100%;
-  height: 100vh;
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
-  transition: background-color 0.3s, color 0.3s;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  transition: background-color var(--transition-medium), color var(--transition-medium);
 }
 
 body {
@@ -112,8 +162,8 @@ body {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   min-width: 100%;
   min-height: 100vh;
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
+  background-color: var(--bg-color);
+  color: var(--text-color);
   overflow: hidden;
   transition: background-color 0.3s ease, color 0.3s ease;
 }
@@ -291,4 +341,163 @@ body {
   top: 20px;
   right: 20px;
   z-index: 9999;
+}
+
+/* Loading container migliorato */
+.loading-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  width: 100%;
+  background-color: var(--bg-color);
+  transition: background-color var(--transition-medium);
+}
+
+.loading-container .spinner-border {
+  width: 3rem;
+  height: 3rem;
+  color: var(--primary-color);
+}
+
+/* Animazioni generali */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* Animazione per elementi che appaiono */
+.fade-in {
+  animation: fadeIn var(--transition-medium);
+}
+
+.slide-up {
+  animation: slideUp var(--transition-medium);
+}
+
+/* Stili per i contenitori di autenticazione */
+.auth-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 1.5rem;
+  background-color: var(--bg-color);
+  animation: fadeIn 0.5s ease-out;
+}
+
+/* Stili per il contenitore OTP migliorati */
+.otp-container {
+  max-width: 500px;
+  margin: 2rem auto;
+  padding: 2rem;
+  border-radius: var(--border-radius-lg);
+  background-color: var(--bg-color);
+  box-shadow: var(--card-shadow);
+  text-align: center;
+  animation: slideUp 0.4s ease-out;
+}
+
+.otp-container h4 {
+  color: var(--primary-color);
+  margin-bottom: 1.5rem;
+  font-weight: 600;
+}
+
+.otp-container .email-display {
+  background: var(--primary-light);
+  color: var(--primary-color);
+  padding: 0.5rem 1rem;
+  border-radius: var(--border-radius-md);
+  display: inline-block;
+  margin: 0.75rem 0;
+  font-weight: 600;
+}
+
+.otp-container .otp-field {
+  font-size: 1.25rem;
+  letter-spacing: 0.25rem;
+  text-align: center;
+  padding: 1rem;
+}
+
+.otp-container .btn {
+  margin-top: 1rem;
+  padding: 0.75rem 1.5rem;
+  font-weight: 600;
+}
+
+/* Miglioramenti per visualizzazione su dispositivi mobili */
+@media (max-width: 768px) {
+  .otp-container {
+    padding: 1.5rem;
+    margin: 1rem;
+  }
+}
+
+/* Animazione pulsante */
+button.btn-primary {
+  position: relative;
+  overflow: hidden;
+  transition: background-color var(--transition-fast);
+}
+
+button.btn-primary::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 5px;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.5);
+  opacity: 0;
+  border-radius: 100%;
+  transform: scale(1, 1) translate(-50%, -50%);
+  transform-origin: 50% 50%;
+}
+
+button.btn-primary:focus:not(:active)::after {
+  animation: ripple 1s ease-out;
+}
+
+@keyframes ripple {
+  0% {
+    transform: scale(0, 0);
+    opacity: 0.5;
+  }
+  20% {
+    transform: scale(25, 25);
+    opacity: 0.3;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(40, 40);
+  }
 }

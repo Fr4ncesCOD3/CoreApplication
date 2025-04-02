@@ -1,11 +1,11 @@
 .toolbar {
   background-color: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
-  padding: 12px 16px;
+  padding: 14px 20px;
   position: sticky;
   top: 0;
   z-index: 100;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
   transition: all 0.3s ease;
   width: 100%;
   display: flex;
@@ -14,7 +14,7 @@
 
 .toolbar .container-fluid {
   width: 100%;
-  max-width: 100%;
+  max-width: 1600px;
   padding: 0;
 }
 
@@ -23,7 +23,7 @@
   justify-content: space-between;
   align-items: center;
   width: 100%;
-  gap: 20px;
+  gap: 16px;
 }
 
 .toolbar-left {
@@ -37,129 +37,169 @@
 .toolbar-right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   justify-content: flex-end;
-  padding-right: 10px;
 }
 
 .note-title-input {
-  font-size: 1.2rem;
+  font-size: 1.3rem;
   font-weight: 600;
   color: var(--text-primary);
   width: 100%;
   transition: all 0.3s ease;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
+  border: none;
+  background-color: transparent;
+  padding: 6px 10px;
+  border-radius: 6px;
 }
 
 .note-title-input:focus {
   outline: none;
-  box-shadow: none;
-  transform: scale(1.02);
+  box-shadow: 0 0 0 2px var(--accent-color-light, rgba(13, 110, 253, 0.25));
+  background-color: var(--input-focus-bg, rgba(0, 0, 0, 0.02));
+}
+
+[data-theme="dark"] .note-title-input:focus {
+  background-color: var(--input-focus-bg-dark, rgba(255, 255, 255, 0.05));
 }
 
 .toolbar-btn {
   background-color: transparent;
-  border: 1px solid var(--border-color);
+  border: none;
   color: var(--text-primary);
-  border-radius: 6px;
-  padding: 8px 12px;
+  border-radius: 8px;
+  padding: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
-  margin-right: 8px;
-  font-size: 0.9rem;
+  width: 40px;
+  height: 40px;
+  position: relative;
 }
 
 .toolbar-btn:hover {
-  background-color: var(--accent-color);
-  color: white;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  background-color: var(--hover-color, rgba(0, 0, 0, 0.05));
+  color: var(--accent-color);
+  transform: translateY(-1px);
+}
+
+[data-theme="dark"] .toolbar-btn:hover {
+  background-color: var(--hover-color-dark, rgba(255, 255, 255, 0.1));
+}
+
+.toolbar-btn::after {
+  content: '';
+  position: absolute;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  width: 100px;
+  height: 100px;
+  margin-top: -50px;
+  margin-left: -50px;
+  top: 50%;
+  left: 50%;
+  opacity: 0;
+  transition: all 0.6s;
+  transform: scale(0);
+}
+
+.toolbar-btn:active::after {
+  transform: scale(1);
+  opacity: 0;
+  transition: 0s;
+}
+
+.toolbar-btn.save-btn.unsaved {
+  position: relative;
+  color: var(--warning-color, #e67e22);
 }
 
 .delete-btn:hover {
-  color: #ff5252;
+  color: var(--danger-color, #dc3545);
+  background-color: var(--danger-bg-hover, rgba(220, 53, 69, 0.1));
+}
+
+.unsaved-indicator {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 8px;
+  height: 8px;
+  background-color: var(--warning-color, #e67e22);
+  border-radius: 50%;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(230, 126, 34, 0.7);
+  }
+  
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 5px rgba(230, 126, 34, 0);
+  }
+  
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(230, 126, 34, 0);
+  }
 }
 
 .tag {
   background-color: var(--accent-color);
   color: white;
-  padding: 3px 10px;
-  border-radius: 12px;
+  padding: 4px 12px;
+  border-radius: 20px;
   font-size: 0.8rem;
   margin-right: 6px;
   transition: all 0.2s ease;
   display: flex;
   align-items: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .tag:hover {
   transform: translateY(-2px);
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.15);
 }
 
 .remove-tag-btn {
-  color: var(--text-secondary);
-  font-size: 1rem;
-  width: 16px;
-  height: 16px;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.9rem;
+  width: 18px;
+  height: 18px;
   padding: 0;
-  margin-left: 4px;
+  margin-left: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
   line-height: 1;
+  border-radius: 50%;
   text-decoration: none !important;
+  transition: all 0.2s ease;
 }
 
 .remove-tag-btn:hover, 
 .remove-tag-btn:focus, 
 .remove-tag-btn:active {
+  background-color: rgba(0, 0, 0, 0.2);
   color: white;
   text-decoration: none !important;
   box-shadow: none;
 }
 
 .tag-input {
-  width: 120px;
+  width: 130px;
   font-size: 0.9rem;
-}
-
-.export-dropdown {
-  position: relative;
-  display: inline-block;
-}
-
-.export-dropdown-content {
-  display: none;
-  position: absolute;
-  right: 0;
-  background-color: var(--bg-secondary);
-  min-width: 180px;
-  box-shadow: var(--shadow);
-  z-index: 1;
-  border-radius: 8px;
+  border-radius: 20px;
+  padding: 4px 12px;
   border: 1px solid var(--border-color);
-  overflow: hidden;
-}
-
-.export-dropdown-content button {
-  color: var(--text-primary);
-  padding: 10px 15px;
-  transition: all 0.2s ease;
-}
-
-.export-dropdown-content button:hover {
-  background-color: var(--accent-color);
-  color: white;
-}
-
-.toolbar-actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 5px;
 }
 
 .tags-container {
@@ -167,102 +207,39 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  margin-top: 5px;
+  margin-top: 4px;
+  transition: opacity 0.3s ease;
 }
 
-/* Stili per dispositivi mobili */
-@media (max-width: 768px) {
-  .note-title-input {
-    font-size: 1rem;
-  }
-  
-  .toolbar-btn {
-    width: 32px;
-    height: 32px;
-  }
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background-color: var(--bg-primary);
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
 }
 
-/* Ottimizzazione per desktop */
-@media (min-width: 1200px) {
-  .toolbar {
-    padding: 16px 32px;
-  }
-  
-  .toolbar .container-fluid {
-    max-width: 1400px;
-    margin: 0 auto;
-  }
-  
-  .note-title-input {
-    font-size: 1.4rem;
-  }
-  
-  .toolbar-btn {
-    width: 40px;
-    height: 40px;
-  }
-  
-  .toolbar-right {
-    gap: 12px;
-  }
+.add-tag-btn {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background-color: var(--bg-tertiary, rgba(0, 0, 0, 0.03));
+  transition: all 0.2s ease;
+  border: none;
 }
 
-/* Ottimizzazione per schermi molto grandi */
-@media (min-width: 1800px) {
-  .toolbar {
-    padding: 20px 40px;
-  }
-  
-  .toolbar .container-fluid {
-    max-width: 1800px;
-  }
-  
-  .toolbar-left {
-    max-width: 75%;
-  }
-  
-  .toolbar-right {
-    gap: 15px;
-  }
+.add-tag-btn:hover {
+  background-color: var(--bg-hover, rgba(0, 0, 0, 0.05));
+  color: var(--accent-color);
 }
 
-/* Ottimizzazione per schermi desktop medi */
-@media (min-width: 1024px) and (max-width: 1439px) {
-  .toolbar {
-    padding: 14px 24px;
-  }
-  
-  .toolbar-left {
-    max-width: 65%;
-  }
-}
-
-/* Miglioramento per desktop ad alta risoluzione */
-@media (min-width: 1440px) and (max-width: 1799px) {
-  .toolbar {
-    padding: 16px 32px;
-  }
-  
-  .toolbar .container-fluid {
-    max-width: 1400px;
-  }
-  
-  .toolbar-left {
-    max-width: 70%;
-  }
-}
-
-/* Miglioramento per tablet */
-@media (min-width: 768px) and (max-width: 1199px) {
-  .toolbar {
-    padding: 12px 20px;
-  }
-}
-
-/* Miglioramento per mobile */
+/* Ottimizzazione per mobile */
 @media (max-width: 767px) {
   .toolbar {
-    padding: 10px 12px;
+    padding: 12px 10px;
   }
   
   .toolbar-row {
@@ -276,138 +253,117 @@
     max-width: 100%;
     width: 100%;
     padding: 0;
-    margin-left: 40px;
-    display: flex;
-    flex-direction: column;
     align-items: center;
-    text-align: center;
-    position: relative;
   }
   
   .note-title-input {
     font-size: 1.2rem;
-    margin-bottom: 8px;
-    width: calc(100% - 40px); /* Sottrae lo spazio del pulsante sidebar */
-    text-align: center;
-    padding: 6px 10px;
-    border-radius: 6px;
-    background-color: transparent;
-    transition: background-color 0.2s ease;
-  }
-  
-  .note-title-input:focus {
-    background-color: rgba(0, 0, 0, 0.03);
-    transform: none; /* Rimuove la trasformazione di scala per un aspetto più pulito */
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  }
-  
-  [data-theme="dark"] .note-title-input:focus {
-    background-color: rgba(255, 255, 255, 0.05);
-  }
-  
-  .note-title-input::placeholder {
-    opacity: 0.6;
-  }
-  
-  .toolbar-buttons-container {
-    display: flex;
+    margin-bottom: 6px;
     width: 100%;
-    margin-top: 10px;
-    padding: 0;
-    justify-content: space-around;
-    align-items: center;
+    text-align: center;
+  }
+  
+  .toolbar-right {
+    width: 100%;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  
+  .toolbar-actions {
+    width: 100%;
+    justify-content: center;
+    padding: 3px;
   }
   
   .toolbar-btn {
-    width: 42px;
-    height: 42px;
-    margin: 0;
+    width: 36px;
+    height: 36px;
+    padding: 6px;
   }
   
   .tags-container {
-    margin: 5px 0 8px;
-    width: calc(100% - 40px); /* Sottrae lo spazio del pulsante sidebar */
-    display: flex;
     justify-content: center;
-    flex-wrap: wrap;
-    gap: 8px;
+    width: 100%;
+    margin-top: 8px;
   }
   
   .tag {
-    padding: 4px 12px;
-    margin-bottom: 5px;
-    margin-right: 0;
-    border-radius: 16px; /* Rende i tag più arrotondati */
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  }
-  
-  .tag-input-container {
-    width: calc(100% - 40px); /* Sottrae lo spazio del pulsante sidebar */
-    margin-top: 5px;
-    display: flex;
-    justify-content: center;
+    padding: 3px 10px;
+    font-size: 0.75rem;
   }
   
   .tag-input {
     width: 100%;
-    max-width: 250px;
-    border-radius: 16px;
-    padding: 5px 12px;
+    max-width: 200px;
   }
   
-  .container-fluid {
-    padding-left: 0;
-    padding-right: 0;
+  .toolbar-status {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    margin-top: 6px;
   }
 }
 
-/* Ottimizzazione specifica per telefoni piccoli */
-@media (max-width: 375px) {
-  .toolbar-btn {
-    width: 38px;
-    height: 38px;
+/* Per schermi larghi */
+@media (min-width: 1200px) {
+  .toolbar {
+    padding: 16px 32px;
   }
   
   .note-title-input {
-    font-size: 1.1rem;
-    padding: 5px 8px;
+    font-size: 1.4rem;
+    padding: 8px 12px;
+  }
+  
+  .toolbar-btn {
+    width: 44px;
+    height: 44px;
   }
 }
 
-/* Stile per il pulsante di salvataggio con modifiche non salvate */
-.toolbar-btn.save-btn.unsaved {
-  position: relative;
-  color: #e67e22;
-}
-
-.unsaved-indicator {
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 8px;
-  height: 8px;
-  background-color: #e67e22;
-  border-radius: 50%;
-}
-
-/* Stile per il pulsante di condivisione */
-.toolbar-btn.share-btn {
-  color: var(--text-primary);
-}
-
-.toolbar-btn.share-btn:hover {
-  color: #3498db;
-}
-
-/* Migliora la visualizzazione delle informazioni di sincronizzazione */
-.sync-info {
+/* Status di connessione */
+.connection-status {
+  display: flex;
+  align-items: center;
   font-size: 0.8rem;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 150px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  background-color: var(--bg-tertiary, rgba(0, 0, 0, 0.03));
+  transition: all 0.3s ease;
 }
 
-.text-warning {
-  color: #e67e22 !important;
+.connection-status.online {
+  color: var(--success-color, #28a745);
+}
+
+.connection-status.offline {
+  color: var(--danger-color, #dc3545);
+}
+
+.status-icon {
+  margin-right: 6px;
+  font-size: 0.9rem;
+}
+
+/* Badge per note speciali */
+.badge {
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: normal;
+  margin-left: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  display: inline-flex;
+  align-items: center;
+}
+
+.badge.bg-warning {
+  background-color: var(--warning-color, #ffc107) !important;
+  color: var(--warning-text, #212529);
+}
+
+.badge.bg-success {
+  background-color: var(--success-color, #28a745) !important;
+  color: white;
 }

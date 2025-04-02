@@ -9,9 +9,9 @@
 
 .editor-container {
   height: 100%;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  overflow-x: visible;
 }
 
 .editor-content-container {
@@ -38,34 +38,38 @@
 .editor-toolbar {
   display: flex;
   overflow-x: auto;
-    white-space: nowrap;
-  padding: 8px;
-  background-color: var(--toolbar-bg);
+  white-space: nowrap;
+  padding: 10px 12px;
+  background-color: var(--bg-secondary);
   border-bottom: 1px solid var(--border-color);
   scrollbar-width: thin;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+  gap: 8px;
+  justify-content: center;
 }
 
 .editor-toolbar::-webkit-scrollbar {
-  height: 5px;
+  height: 4px;
 }
 
 .editor-toolbar::-webkit-scrollbar-thumb {
-  background-color: rgba(0, 0, 0, 0.2);
+  background-color: var(--accent-color, rgba(0, 0, 0, 0.2));
   border-radius: 4px;
 }
 
 .toolbar-group {
   display: inline-flex;
-  margin-right: 10px;
+  margin-right: 8px;
   flex-shrink: 0;
-}
-
-.toolbar-btn {
-  padding: 6px 10px;
-  display: flex;
   align-items: center;
-  justify-content: center;
-  border-radius: 4px;
+  background-color: var(--bg-primary);
+  border-radius: 8px;
+  padding: 2px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .editor-toolbar button {
@@ -73,23 +77,24 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  padding: 8px 12px;
+  padding: 7px;
   border-radius: 6px;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
+  background: transparent;
+  border: none;
   color: var(--text-primary);
   cursor: pointer;
   font-size: 0.95rem;
   transition: all 0.2s ease;
-  min-width: 40px;
-  height: 40px;
+  min-width: 36px;
+  height: 36px;
+  position: relative;
+  margin: 0 2px;
 }
 
 .editor-toolbar button:hover {
-  background-color: var(--accent-color);
-  color: white;
+  background-color: var(--hover-color, rgba(0, 0, 0, 0.05));
+  color: var(--accent-color);
   transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
 }
 
 .editor-toolbar button.is-active {
@@ -98,25 +103,256 @@
   border-color: var(--accent-color);
 }
 
+.editor-toolbar button.is-active:hover {
+  background-color: var(--accent-hover-color, rgba(13, 110, 253, 0.8));
+  color: white;
+}
+
 .editor-toolbar .divider {
   width: 1px;
   height: 24px;
   background-color: var(--border-color);
-  margin: 0 8px;
+  margin: 0 6px;
+}
+
+/* Tooltip per i pulsanti */
+.editor-toolbar button:before {
+  content: attr(data-tip);
+  position: absolute;
+  top: -30px;
+  left: 50%;
+  transform: translateX(-50%) scale(0.8);
+  background-color: var(--tooltip-bg, rgba(0, 0, 0, 0.8));
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 100;
+}
+
+.editor-toolbar button:hover:before {
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(-50%) scale(1);
+  top: -35px;
+}
+
+/* Ripple effect */
+.editor-toolbar button:after {
+  content: '';
+  position: absolute;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  width: 100px;
+  height: 100px;
+  margin-top: -50px;
+  margin-left: -50px;
+  top: 50%;
+  left: 50%;
+  opacity: 0;
+  transition: all 0.6s;
+  transform: scale(0);
+}
+
+.editor-toolbar button:active:after {
+  transform: scale(1);
+  opacity: 0;
+  transition: 0s;
+}
+
+/* Tema scuro */
+[data-theme="dark"] .editor-toolbar {
+  background-color: var(--bg-secondary, #252525);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+
+[data-theme="dark"] .toolbar-group {
+  background-color: var(--bg-primary, #333333);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="dark"] .editor-toolbar button {
+  color: var(--text-primary, #e0e0e0);
+}
+
+[data-theme="dark"] .editor-toolbar button:hover {
+  background-color: var(--hover-color, rgba(255, 255, 255, 0.1));
+}
+
+[data-theme="dark"] .editor-toolbar button.is-active {
+  background-color: var(--accent-color, #0d6efd);
+}
+
+/* Responsività per mobile */
+@media (max-width: 768px) {
+  .editor-toolbar {
+    padding: 8px 6px;
+    justify-content: flex-start;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    gap: 4px;
+  }
+  
+  .toolbar-group {
+    margin-right: 6px;
+    padding: 1px;
+  }
+  
+  .editor-toolbar button {
+    min-width: 32px;
+    height: 32px;
+    padding: 5px;
+    font-size: 0.85rem;
+    margin: 0 1px;
+  }
+  
+  .editor-toolbar:before {
+    content: '';
+    display: block;
+    width: 8px;
+    flex-shrink: 0;
+  }
+  
+  .editor-toolbar:after {
+    content: '';
+    display: block;
+    width: 8px;
+    flex-shrink: 0;
+  }
+  
+  .editor-toolbar .divider {
+    height: 20px;
+    margin: 0 4px;
+  }
 }
 
 /* Area di modifica del testo */
 .ProseMirror {
-  padding: 1rem;
-  min-height: 300px;
+  flex: 1;
+  overflow-y: auto;
   outline: none;
-  background-color: transparent;
-  color: var(--text-primary);
-  font-size: 1rem;
-  line-height: 1.6;
-  overflow-wrap: break-word;
+  padding: 1rem;
+  min-height: 100%;
+  max-width: 960px;
+  margin: 0 auto;
+  width: 100%;
   word-wrap: break-word;
-  word-break: break-word;
+  white-space: pre-wrap;
+  box-sizing: border-box;
+}
+
+.ProseMirror:focus {
+  outline: none;
+}
+
+.ProseMirror p {
+  margin: 1em 0;
+  line-height: 1.6;
+}
+
+.ProseMirror h1,
+.ProseMirror h2,
+.ProseMirror h3 {
+  margin-top: 1.5em;
+  margin-bottom: 0.75em;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.ProseMirror h1 {
+  font-size: 1.75em;
+}
+
+.ProseMirror h2 {
+  font-size: 1.5em;
+}
+
+.ProseMirror h3 {
+  font-size: 1.25em;
+}
+
+.ProseMirror ul,
+.ProseMirror ol {
+  padding-left: 1.5em;
+  margin: 1em 0;
+}
+
+.ProseMirror li p {
+  margin: 0.5em 0;
+}
+
+.ProseMirror code {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
+  background-color: rgba(135, 131, 120, 0.15);
+  padding: 0.2em 0.4em;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+
+.ProseMirror pre {
+  background-color: #f6f8fa;
+  border-radius: 3px;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
+  padding: 16px;
+  overflow: auto;
+  font-size: 85%;
+  line-height: 1.45;
+  border-radius: 6px;
+  margin: 1em 0;
+}
+
+.ProseMirror pre code {
+  background-color: transparent;
+  padding: 0;
+  margin: 0;
+  font-size: 100%;
+  word-break: normal;
+  white-space: pre;
+  border: 0;
+}
+
+/* Supporto tema scuro */
+[data-theme="dark"] .ProseMirror pre {
+  background-color: #2a2d35;
+}
+
+/* Stile mobile */
+@media (max-width: 768px) {
+  .ProseMirror {
+    padding: 0.75rem;
+    font-size: 16px; /* Dimensione testo leggermente maggiore su mobile */
+  }
+  
+  .editor-toolbar {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.25rem;
+  }
+}
+
+/* Altre ottimizzazioni per dispositivi con schermo piccolo */
+@media (max-width: 480px) {
+  .ProseMirror h1 {
+    font-size: 1.5em;
+  }
+  
+  .ProseMirror h2 {
+    font-size: 1.35em;
+  }
+  
+  .ProseMirror h3 {
+    font-size: 1.2em;
+  }
+}
+
+/* Stile per editor in focus */
+.editor-focused .ProseMirror {
+  background-color: var(--bg-primary);
 }
 
 /* Stili per gli elementi di testo */
@@ -124,30 +360,6 @@
   margin-bottom: 1.2em;
   line-height: 1.6;
   font-size: 1rem;
-  color: var(--text-primary);
-}
-
-.ProseMirror h1 {
-  font-size: 2rem;
-  margin-top: 1.5em;
-  margin-bottom: 0.8em;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.ProseMirror h2 {
-  font-size: 1.5rem;
-  margin-top: 1.3em;
-  margin-bottom: 0.7em;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.ProseMirror h3 {
-  font-size: 1.25rem;
-  margin-top: 1.2em;
-  margin-bottom: 0.6em;
-  font-weight: 600;
   color: var(--text-primary);
 }
 
@@ -1341,20 +1553,21 @@
   left: 0;
   right: 0;
   background-color: var(--bg-primary);
-  border-top-left-radius: 16px;
-  border-top-right-radius: 16px;
-  padding: 16px;
-  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.2);
+  border-top-left-radius: 20px;
+  border-top-right-radius: 20px;
+  padding: 24px;
+  box-shadow: 0 -5px 25px rgba(0, 0, 0, 0.15);
   transform: translateY(100%);
-  transition: transform 0.3s ease;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   z-index: 2000;
   max-height: 80vh;
   overflow-y: auto;
 }
 
 .mobile-font-size-tool.active {
-    transform: translateY(0);
-  }
+  transform: translateY(0);
+}
+
 .tool-overlay {
   position: fixed;
   top: 0;
@@ -1366,26 +1579,25 @@
   visibility: hidden;
   transition: opacity 0.3s ease;
   z-index: 1999;
-  touch-action: none; /* Previene gli eventi touch di default */
+  backdrop-filter: blur(2px);
 }
 
 .tool-overlay.active {
-    opacity: 1;
+  opacity: 1;
   visibility: visible;
-  /* Aggiungi backdropTransitionOutTiming per prevenire flickering */
-  backdrop-transition-out-timing: 0;
 }
 
 .tool-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 
 .tool-header h3 {
   margin: 0;
   font-size: 18px;
+  font-weight: 600;
 }
 
 .close-btn {
@@ -1410,162 +1622,556 @@
   height: 4px;
   background-color: var(--border-color);
   border-radius: 2px;
-  margin: 0 auto 16px;
+  margin: 0 auto 20px;
 }
 
-/* Stili per il testo colorato */
-.ProseMirror .text-styled[style*="color"] {
-  color: inherit;
+.tool-footer {
+  margin-top: 20px;
+  padding-top: 15px;
+  border-top: 1px solid var(--border-color);
 }
 
-.ProseMirror span[style*="color"] {
-  color: inherit !important;
+.tool-footer .btn {
+  min-width: 120px;
+  font-weight: 500;
 }
 
-/* Assicurati che il testo colorato mantenga il suo colore anche quando selezionato */
-.ProseMirror ::selection {
-  background-color: rgba(var(--accent-color-rgb), 0.2);
+/* Miglioramenti per color picker e font size */
+.font-size-slider-container {
+  padding: 15px;
+  background-color: var(--bg-secondary);
+  border-radius: 12px;
 }
 
-[data-theme="dark"] .ProseMirror ::selection {
-  background-color: rgba(var(--accent-color-rgb), 0.3);
-}
-
-.focus-mode .editor-content {
-  max-width: 700px;
-  margin: 0 auto;
-  padding: 40px;
+.font-size-preview {
+  text-align: center;
+  margin-bottom: 15px;
+  font-size: var(--preview-size);
+  font-family: 'Georgia', serif;
   background-color: var(--bg-primary);
-  box-shadow: 0 0 30px rgba(0, 0, 0, 0.1);
+  padding: 15px;
+  border-radius: 8px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
-.focus-mode .ProseMirror {
-  font-size: 1.1rem;
-  line-height: 1.8;
+.font-size-slider {
+  width: 100%;
+  height: 8px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: linear-gradient(to right, var(--accent-color), #a29bfe);
+  outline: none;
+  border-radius: 4px;
+  margin: 10px 0;
 }
 
-.focus-mode .toolbar,
-.focus-mode .sidebar {
-  opacity: 0.2;
-  transition: opacity 0.3s ease;
+.font-size-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent-color);
+  cursor: pointer;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.2);
+  transition: transform 0.1s;
 }
 
-.focus-mode .toolbar:hover,
-.focus-mode .sidebar:hover {
-  opacity: 1;
+.font-size-slider::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent-color);
+  cursor: pointer;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.2);
+  transition: transform 0.1s;
 }
 
-/* Aggiungi questa nuova regola per garantire che gli stili inline abbiano priorità */
-.ProseMirror span[style*="color"] {
-  color: inherit !important;
+.font-size-slider:active::-webkit-slider-thumb {
+  transform: scale(1.2);
 }
 
-/* Assicurati che il testo colorato sia visibile in tema scuro */
-[data-theme="dark"] .ProseMirror .text-styled[style*="color"] {
-  color: inherit !important;
+.font-size-slider:active::-moz-range-thumb {
+  transform: scale(1.2);
 }
 
-/* Migliora la visibilità della selezione in tema scuro */
-[data-theme="dark"] .ProseMirror ::selection {
-  background-color: rgba(108, 92, 231, 0.4);
+.font-size-range {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
 }
 
-/* Migliora il selettore di colori */
+/* Miglioramenti per il mobile color picker */
 .color-picker-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  gap: 8px;
-  padding: 12px;
-  background-color: var(--bg-primary);
-  border-radius: 8px;
-  box-shadow: var(--shadow);
-  z-index: 1000;
+  gap: 12px;
+  padding: 15px;
+  background-color: var(--bg-secondary);
+  border-radius: 12px;
 }
 
 .color-option {
-  width: 30px;
-  height: 30px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   cursor: pointer;
   border: 2px solid transparent;
   transition: all 0.2s ease;
-  position: relative;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
 .color-option:hover, 
 .color-option:focus {
   transform: scale(1.15);
-  box-shadow: 0 0 0 2px var(--bg-primary), 0 0 0 4px var(--accent-color);
+  box-shadow: 0 0 0 3px var(--bg-primary), 0 0 0 5px var(--accent-color);
 }
 
-.color-option.active {
-  border-color: white;
-  box-shadow: 0 0 0 2px var(--accent-color);
+/* Migliorato lo stile generale dei modali */
+.modal-content {
+  border-radius: 12px;
+  overflow: hidden;
+  border: none;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  animation: modalFadeIn 0.3s ease;
 }
 
-/* Assicurati che il selettore di colori funzioni bene in tema scuro */
-[data-theme="dark"] .color-picker-grid {
+@keyframes modalFadeIn {
+  from { opacity: 0; transform: translateY(-20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.modal-header {
   background-color: var(--bg-secondary);
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.modal-header .modal-title {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.modal-header .btn-close {
+  padding: 10px;
+  margin: -10px -10px -10px auto;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.modal-header .btn-close:hover {
+  opacity: 1;
+}
+
+.modal-body {
+  padding: 20px;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.modal-footer {
+  background-color: var(--bg-secondary);
+  padding: 14px 20px;
+  border-top: 1px solid var(--border-color);
+}
+
+.modal-footer .btn {
+  padding: 8px 20px;
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.modal-footer .btn-primary {
+  background-color: var(--accent-color);
+  border-color: var(--accent-color);
+}
+
+.modal-footer .btn-primary:hover {
+  background-color: var(--primary-hover);
+  border-color: var(--primary-hover);
+  transform: translateY(-1px);
+}
+
+.modal-footer .btn-secondary:hover {
+  transform: translateY(-1px);
+}
+
+/* Tema scuro per i modali */
+[data-theme="dark"] .modal-content {
+  background-color: var(--bg-secondary);
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .modal-header {
+  background-color: var(--bg-secondary);
+  border-bottom-color: var(--border-color);
+}
+
+[data-theme="dark"] .modal-footer {
+  background-color: var(--bg-secondary);
+  border-top-color: var(--border-color);
+}
+
+[data-theme="dark"] .btn-close {
+  filter: invert(1) grayscale(100%) brightness(200%);
+}
+
+/* Migliorato l'aspetto dei form nei modali */
+.modal-body .form-control {
+  padding: 10px 16px;
+  border-radius: 8px;
+  height: auto;
+  background-color: var(--input-bg);
+  color: var(--text-primary);
   border: 1px solid var(--border-color);
+  transition: all 0.2s ease;
 }
 
-/* Classe specifica per sovrascrivere i colori in tema scuro */
-.color-override[style*="color"] {
-  color: inherit !important;
+.modal-body .form-control:focus {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 3px rgba(108, 92, 231, 0.25);
 }
 
-/* Aggiungi un'animazione per il cambio di colore del testo */
-@keyframes colorChange {
-  0% { transform: scale(1); }
-  50% { transform: scale(1.05); }
-  100% { transform: scale(1); }
+.modal-body .form-label {
+  font-weight: 500;
+  margin-bottom: 8px;
+  color: var(--text-primary);
 }
 
-.ProseMirror span[style*="color"]:not(:focus-within) {
-  animation: colorChange 0.3s ease;
+.modal-body .form-text {
+  font-size: 0.85rem;
+  margin-top: 6px;
+  color: var(--text-secondary);
 }
 
-/* Migliorare il padding dell'editor su mobile per evitare sovrapposizioni */
+/* Miglioramento del modale per l'inserimento link */
+.link-modal .form-group {
+  margin-bottom: 0;
+}
+
+.link-modal .form-control {
+  font-family: monospace;
+}
+
+/* Migliorie per la visualizzazione dei documenti */
+.document-modal {
+  max-width: 90vw;
+}
+
+.document-modal.fullscreen {
+  max-width: 100vw;
+  margin: 0;
+}
+
+.document-modal .modal-content {
+  height: 80vh;
+  max-height: 80vh;
+}
+
+.document-modal.fullscreen .modal-content {
+  height: 100vh;
+  max-height: 100vh;
+  border-radius: 0;
+}
+
+.document-modal .modal-body {
+  padding: 0;
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.document-viewer {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--bg-secondary);
+}
+
+.document-toolbar {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: var(--bg-primary);
+  padding: 8px 12px;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  z-index: 10;
+}
+
+.document-toolbar button {
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.document-toolbar button:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="dark"] .document-toolbar button:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.document-toolbar button:active {
+  transform: scale(0.95);
+}
+
+/* Miglioramenti per la modalità mobile */
 @media (max-width: 767px) {
-  .mobile-mode .ProseMirror {
-    padding: 16px 16px 80px 16px; /* Aumentare il padding inferiore per la toolbar */
-    min-height: calc(100vh - 120px); /* Regolare l'altezza minima */
+  .modal-dialog {
+    margin: 0.5rem;
   }
   
-  /* Assicurarsi che la toolbar mobile sia sempre visibile e non sovrapposta */
-.mobile-toolbar-container {
+  .modal-content {
+    border-radius: 10px;
+  }
+  
+  .modal-header {
+    padding: 14px 16px;
+  }
+  
+  .modal-body {
+    padding: 16px;
+  }
+  
+  .modal-footer {
+    padding: 12px 16px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  
+  .modal-footer .btn {
+    margin: 0;
+    padding: 10px;
+  }
+  
+  .document-modal {
+    max-width: 100vw;
+    margin: 0;
+  }
+  
+  .document-modal .modal-content {
+    height: 100vh;
+    max-height: 100vh;
+    border-radius: 0;
+  }
+  
+  .document-toolbar {
+    bottom: 10px;
+    padding: 6px 10px;
+  }
+  
+  .document-toolbar button {
+    width: 36px;
+    height: 36px;
+  }
+}
+
+/* Miglioramento dell'aspetto delle tool cards */
+.mobile-font-size-tool {
   position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
-    z-index: 100;
   background-color: var(--bg-primary);
-    border-top: 1px solid var(--border-color);
-  }
+  border-top-left-radius: 20px;
+  border-top-right-radius: 20px;
+  padding: 24px;
+  box-shadow: 0 -5px 25px rgba(0, 0, 0, 0.15);
+  transform: translateY(100%);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 2000;
+  max-height: 80vh;
+  overflow-y: auto;
 }
 
-/* Rimuovere o commentare gli stili per il pulsante di formattazione mobile */
-/* .mobile-format-button {
+.mobile-font-size-tool.active {
+  transform: translateY(0);
+}
+
+.tool-overlay {
   position: fixed;
-  bottom: 80px;
-  right: 20px;
-  width: 50px;
-  height: 50px;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease;
+  z-index: 1999;
+  backdrop-filter: blur(2px);
+}
+
+.tool-overlay.active {
+  opacity: 1;
+  visibility: visible;
+}
+
+.tool-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.tool-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  padding: 4px;
   border-radius: 50%;
-  background-color: var(--accent-color);
-  color: white;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-  z-index: 100;
   cursor: pointer;
-  font-size: 1.2rem;
-} */
+  transition: background-color 0.2s;
+}
 
-/* .mobile-format-button:active {
-  transform: scale(0.95);
-} */
+.close-btn:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+
+.swipe-indicator {
+  width: 40px;
+  height: 4px;
+  background-color: var(--border-color);
+  border-radius: 2px;
+  margin: 0 auto 20px;
+}
+
+.tool-footer {
+  margin-top: 20px;
+  padding-top: 15px;
+  border-top: 1px solid var(--border-color);
+}
+
+.tool-footer .btn {
+  min-width: 120px;
+  font-weight: 500;
+}
+
+/* Miglioramenti per color picker e font size */
+.font-size-slider-container {
+  padding: 15px;
+  background-color: var(--bg-secondary);
+  border-radius: 12px;
+}
+
+.font-size-preview {
+  text-align: center;
+  margin-bottom: 15px;
+  font-size: var(--preview-size);
+  font-family: 'Georgia', serif;
+  background-color: var(--bg-primary);
+  padding: 15px;
+  border-radius: 8px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.font-size-slider {
+  width: 100%;
+  height: 8px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: linear-gradient(to right, var(--accent-color), #a29bfe);
+  outline: none;
+  border-radius: 4px;
+  margin: 10px 0;
+}
+
+.font-size-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent-color);
+  cursor: pointer;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.2);
+  transition: transform 0.1s;
+}
+
+.font-size-slider::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent-color);
+  cursor: pointer;
+  box-shadow: 0 1px 5px rgba(0, 0, 0, 0.2);
+  transition: transform 0.1s;
+}
+
+.font-size-slider:active::-webkit-slider-thumb {
+  transform: scale(1.2);
+}
+
+.font-size-slider:active::-moz-range-thumb {
+  transform: scale(1.2);
+}
+
+.font-size-range {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+/* Miglioramenti per il mobile color picker */
+.color-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px;
+  padding: 15px;
+  background-color: var(--bg-secondary);
+  border-radius: 12px;
+}
+
+.color-option {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.color-option:hover, 
+.color-option:focus {
+  transform: scale(1.15);
+  box-shadow: 0 0 0 3px var(--bg-primary), 0 0 0 5px var(--accent-color);
+}
 
 /* Stili per l'allineamento del testo */
 .ProseMirror .text-center {
@@ -1632,7 +2238,7 @@
     width: 5px;
     height: 5px;
     background: rgba(255, 255, 255, 0.5);
-  opacity: 0;
+ opacity: 0;
     border-radius: 100%;
     transform: scale(1, 1) translate(-50%, -50%);
     transform-origin: 50% 50%;
@@ -2009,4 +2615,583 @@
   width: 40px;
   background: linear-gradient(to left, transparent, var(--toolbar-bg));
   pointer-events: none;
+}
+
+/* Modali dell'editor - Stili generali */
+.modal {
+  --modal-transition: 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.modal-dialog {
+  max-width: 550px;
+}
+
+.modal-content {
+  border-radius: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+  border: none;
+  animation: modalFadeIn var(--modal-transition);
+}
+
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.modal-header {
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  background-color: var(--bs-light-hover, #f8f9fa);
+}
+
+.modal-body {
+  padding: 1.5rem;
+}
+
+.modal-footer {
+  padding: 1.25rem 1.5rem;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  background-color: var(--bs-light-hover, #f8f9fa);
+}
+
+.btn-close {
+  opacity: 0.7;
+  transition: opacity 0.2s ease;
+}
+
+.btn-close:hover {
+  opacity: 1;
+}
+
+/* Tema scuro per i modali */
+[data-bs-theme="dark"] .modal-content {
+  background-color: var(--bs-dark, #212529);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+[data-bs-theme="dark"] .modal-header,
+[data-bs-theme="dark"] .modal-footer {
+  background-color: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-bs-theme="dark"] .btn-close {
+  filter: invert(1) grayscale(100%) brightness(200%);
+}
+
+/* Stili per il modale di inserimento link */
+.link-modal .modal-dialog {
+  max-width: 500px;
+}
+
+.link-modal .modal-title {
+  font-weight: 600;
+  font-size: 1.25rem;
+  color: var(--bs-primary);
+}
+
+.link-modal .modal-body {
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+}
+
+.link-modal .form-label {
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
+
+.link-modal .form-control {
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.link-modal .form-control:focus {
+  border-color: var(--bs-primary);
+  box-shadow: 0 0 0 0.25rem rgba(var(--bs-primary-rgb), 0.15);
+}
+
+.link-modal .form-text {
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--bs-secondary);
+}
+
+.link-modal .btn {
+  padding: 0.5rem 1.25rem;
+  font-weight: 500;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.link-modal .btn-primary {
+  background-color: var(--bs-primary);
+  border-color: var(--bs-primary);
+}
+
+.link-modal .btn-primary:hover {
+  background-color: var(--bs-primary-hover, var(--bs-primary));
+  border-color: var(--bs-primary-hover, var(--bs-primary));
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(var(--bs-primary-rgb), 0.2);
+}
+
+.link-modal .btn-secondary {
+  background-color: var(--bs-light);
+  border-color: var(--bs-light);
+  color: var(--bs-dark);
+}
+
+.link-modal .btn-secondary:hover {
+  background-color: var(--bs-light-hover, var(--bs-light));
+  border-color: var(--bs-light-hover, var(--bs-light));
+}
+
+/* Tema scuro per il modale di inserimento link */
+[data-bs-theme="dark"] .link-modal .form-control {
+  background-color: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: var(--bs-light);
+}
+
+[data-bs-theme="dark"] .link-modal .form-control:focus {
+  border-color: var(--bs-primary);
+  background-color: rgba(255, 255, 255, 0.07);
+}
+
+[data-bs-theme="dark"] .link-modal .btn-secondary {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: var(--bs-light);
+}
+
+[data-bs-theme="dark"] .link-modal .btn-secondary:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Feedback visivi per il modale link */
+.link-modal .url-input {
+  position: relative;
+}
+
+.link-modal .url-input .form-control.is-valid {
+  border-color: var(--bs-success);
+  padding-right: calc(1.5em + 0.75rem);
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3e%3cpath fill='%2328a745' d='M2.3 6.73L.6 4.53c-.4-1.04.46-1.4 1.1-.8l1.1 1.4 3.4-3.8c.6-.63 1.6-.27 1.2.7l-4 4.6c-.43.5-.8.4-1.1.1z'/%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right calc(0.375em + 0.1875rem) center;
+  background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+}
+
+.link-modal .url-input .form-control.is-invalid {
+  border-color: var(--bs-danger);
+  padding-right: calc(1.5em + 0.75rem);
+  background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' width='12' height='12' fill='none' stroke='%23dc3545'%3e%3ccircle cx='6' cy='6' r='4.5'/%3e%3cpath stroke-linejoin='round' d='M5.8 3.6h.4L6 6.5z'/%3e%3ccircle cx='6' cy='8.2' r='.6' fill='%23dc3545' stroke='none'/%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right calc(0.375em + 0.1875rem) center;
+  background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+}
+
+/* Stili per modali documenti */
+.document-modal .modal-dialog {
+  max-width: 80%;
+  height: 80vh;
+}
+
+.document-modal .modal-content {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.document-modal .modal-body {
+  flex: 1;
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.document-modal .modal-header {
+  padding: 1rem 1.5rem;
+  display: flex;
+  align-items: center;
+}
+
+.document-modal .modal-title {
+  font-weight: 600;
+  font-size: 1.25rem;
+  margin-right: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.document-modal .modal-header .btn-group {
+  margin-left: 1rem;
+}
+
+.document-modal .modal-footer {
+  padding: 1rem 1.5rem;
+}
+
+/* Stili responsivi per modali */
+@media (max-width: 768px) {
+  .modal-dialog {
+    max-width: 95%;
+    margin: 0.5rem auto;
+  }
+  
+  .modal-header {
+    padding: 1rem;
+  }
+  
+  .modal-body {
+    padding: 1rem;
+  }
+  
+  .modal-footer {
+    padding: 1rem;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+  
+  .modal-footer .btn {
+    flex: 1;
+  }
+  
+  .document-modal .modal-dialog {
+    max-width: 100%;
+    height: 100%;
+    margin: 0;
+  }
+  
+  .document-modal .modal-content {
+    border-radius: 0;
+  }
+}
+
+/* Transizioni e animazioni per modali */
+.modal-backdrop.show {
+  opacity: 0.5;
+}
+
+.modal.fade .modal-dialog {
+  transition: transform var(--modal-transition);
+}
+
+.modal.fade.show .modal-dialog {
+  transform: none;
+}
+
+/* Stili per il modale di font size */
+.font-size-modal .modal-dialog {
+  max-width: 300px;
+}
+
+.font-size-modal .font-size-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+.font-size-modal .font-size-option {
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background-color: var(--bs-light);
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.font-size-modal .font-size-option:hover,
+.font-size-modal .font-size-option.active {
+  background-color: var(--bs-primary);
+  color: white;
+  border-color: var(--bs-primary);
+}
+
+[data-bs-theme="dark"] .font-size-modal .font-size-option {
+  background-color: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: var(--bs-light);
+}
+
+/* Stili per il modale di colore */
+.color-picker-modal .color-options {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.5rem;
+}
+
+.color-picker-modal .color-option {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  border: 2px solid transparent;
+}
+
+.color-picker-modal .color-option:hover {
+  transform: scale(1.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.color-picker-modal .color-option.active {
+  border-color: var(--bs-primary);
+  transform: scale(1.1);
+  box-shadow: 0 0 0 2px rgba(var(--bs-primary-rgb), 0.3);
+}
+
+/* Stili per l'inserimento di equazioni e formule */
+.equation-modal textarea {
+  font-family: monospace;
+  resize: vertical;
+  height: 120px;
+}
+
+.equation-modal .preview {
+  min-height: 80px;
+  padding: 1rem;
+  background-color: var(--bs-light);
+  border-radius: 8px;
+  margin-top: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+[data-bs-theme="dark"] .equation-modal .preview {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+/* Stili per tooltip e popover */
+.tooltip {
+  --bs-tooltip-max-width: 200px;
+  --bs-tooltip-padding-x: 0.75rem;
+  --bs-tooltip-padding-y: 0.5rem;
+  --bs-tooltip-font-size: 0.85rem;
+  --bs-tooltip-color: #fff;
+  --bs-tooltip-bg: var(--bs-primary);
+  --bs-tooltip-border-radius: 6px;
+  --bs-tooltip-opacity: 0.9;
+  --bs-tooltip-arrow-width: 0.8rem;
+  --bs-tooltip-arrow-height: 0.4rem;
+  z-index: 1080;
+}
+
+.popover {
+  --bs-popover-max-width: 276px;
+  --bs-popover-font-size: 0.875rem;
+  --bs-popover-bg: #fff;
+  --bs-popover-border-width: 1px;
+  --bs-popover-border-color: rgba(0, 0, 0, 0.2);
+  --bs-popover-border-radius: 0.5rem;
+  --bs-popover-box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+  --bs-popover-header-padding-x: 1rem;
+  --bs-popover-header-padding-y: 0.5rem;
+  --bs-popover-header-font-size: 1rem;
+  --bs-popover-header-color: inherit;
+  --bs-popover-header-bg: #f0f0f0;
+  --bs-popover-body-padding-x: 1rem;
+  --bs-popover-body-padding-y: 1rem;
+  --bs-popover-body-color: #212529;
+  --bs-popover-arrow-width: 1rem;
+  --bs-popover-arrow-height: 0.5rem;
+  z-index: 1070;
+}
+
+[data-bs-theme="dark"] .popover {
+  --bs-popover-bg: var(--bs-dark);
+  --bs-popover-header-bg: rgba(255, 255, 255, 0.1);
+  --bs-popover-border-color: rgba(255, 255, 255, 0.15);
+  --bs-popover-body-color: var(--bs-light);
+}
+
+/* Feedback pulsante durante caricamento */
+.btn-loading {
+  position: relative;
+  color: transparent !important;
+}
+
+.btn-loading::after {
+  content: "";
+  position: absolute;
+  width: 1rem;
+  height: 1rem;
+  top: calc(50% - 0.5rem);
+  left: calc(50% - 0.5rem);
+  border-radius: 50%;
+  border: 2px solid;
+  border-color: currentColor currentColor currentColor transparent;
+  animation: button-loading-spinner 0.75s linear infinite;
+}
+
+@keyframes button-loading-spinner {
+  from {
+    transform: rotate(0turn);
+  }
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+/* Miglioramento del backdrop del modale */
+.modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.65) !important;
+  backdrop-filter: blur(3px);
+  z-index: 1040;
+  opacity: 1 !important;
+}
+
+/* Assicurarsi che il modale sia al di sopra di tutto */
+.modal {
+  z-index: 1050 !important;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Stile specifico per il link-modal per garantire che sia sempre visibile */
+.link-modal {
+  z-index: 1060 !important; /* Un valore più alto per essere sicuri */
+}
+
+.link-modal .modal-dialog {
+  margin: 1.75rem auto;
+  max-width: 500px;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
+}
+
+/* Migliorare l'animazione del modale */
+.modal.fade .modal-dialog {
+  transition: transform var(--modal-transition), opacity var(--modal-transition);
+  transform: translateY(-20px) scale(0.95);
+  opacity: 0;
+}
+
+.modal.fade.show .modal-dialog {
+  transform: translateY(0) scale(1);
+  opacity: 1;
+}
+
+/* Stile specifico per il backdrop del modale link */
+.link-modal-backdrop {
+  opacity: 1 !important;
+  background-color: rgba(0, 0, 0, 0.75) !important;
+  backdrop-filter: blur(4px);
+}
+
+/* Assicurarsi che il contenuto dell'editor sia opacizzato quando il modale è aperto */
+.modal-open .editor-content-container {
+  filter: none;
+  transition: filter 0.3s ease;
+  opacity: 0.3;
+}
+
+/* Stile per quando il modal è attivo */
+body.modal-backdrop-active .editor-container {
+  position: relative;
+}
+
+body.modal-backdrop-active .editor-container::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  z-index: 1030;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+/* Migliorare l'aspetto del modale dei link */
+.link-modal .modal-dialog {
+  max-width: 500px;
+  margin: 1.75rem auto;
+  transform: translateY(0) !important;
+  opacity: 1 !important;
+  filter: none !important;
+}
+
+.link-modal .modal-content {
+  border-radius: 12px;
+  border: none;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+  animation: modalBounce 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+@keyframes modalBounce {
+  0% { transform: scale(0.95); opacity: 0; }
+  70% { transform: scale(1.02); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.link-modal .modal-header {
+  background-color: var(--bs-primary, #6c5ce7);
+  color: white;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.link-modal .modal-title {
+  font-weight: 600;
+  font-size: 1.25rem;
+  color: white;
+}
+
+.link-modal .modal-header .btn-close {
+  filter: brightness(0) invert(1);
+  opacity: 0.8;
+}
+
+.link-modal .modal-header .btn-close:hover {
+  opacity: 1;
+}
+
+.link-modal .modal-body {
+  padding: 20px;
+  background-color: var(--bs-light, #f8f9fa);
+}
+
+[data-bs-theme="dark"] .link-modal .modal-header {
+  background-color: var(--bs-primary, #6c5ce7);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+[data-bs-theme="dark"] .link-modal .modal-body {
+  background-color: #2d3436;
+  color: #f5f6fa;
+}
+
+/* Rimuovere sfocatura e opacità dal modale */
+.modal-open .link-modal,
+.modal-open .link-modal * {
+  filter: none !important;
+  opacity: 1 !important;
 }
